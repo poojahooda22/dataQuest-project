@@ -1,0 +1,36 @@
+# ── Workspace & tooling — never track ──
+.claude/
+.agents/
+.cursor/
+.gemini/
+graphify-out/
+CLAUDE.md
+AGENTS.md
+CURSOR.md
+GEMINI.md
+.mcp.json
+.graphifyignore
+
+# ── Secrets ──
+**/.env
+**/.env.*
+!**/.env.example
+
+# ── Python (backend) ──
+**/.venv/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# ── Node / build output (frontend) ──
+**/node_modules/
+**/dist/
+**/dist-ssr/
+**/.vite/
+
+# ── OS / editor ──
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/

@@ -1,0 +1,1 @@
+"""The read API (no httpx here — read never fetches; serves only from our store)."""

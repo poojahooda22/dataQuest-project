@@ -1,0 +1,42 @@
+# The local venv MUST be excluded (built for the host OS/arch; would break the image + bust the cache).
+.venv/
+venv/
+ENV/
+
+# Python build / cache cruft
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+*.so
+
+# Test / lint / type caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets & local config — NEVER bake into an image (reach the container via `fly secrets`)
+.env
+.env.*
+*.pem
+*.key
+
+# VCS / IDE / OS / docs / agent-workspace (not needed in the image)
+.git/
+.gitignore
+.github/
+.idea/
+.vscode/
+.DS_Store
+README.md
+.claude/
+
+# The build/compose files themselves
+Dockerfile
+.dockerignore
+compose.yml
+docker-compose*.yml

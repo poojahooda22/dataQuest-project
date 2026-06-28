@@ -1,0 +1,50 @@
+# fly.toml — the DataQuest read API (FastAPI/Uvicorn on Fly). `fly deploy` from backend/.
+# A persistent long-lived process (NOT serverless): it holds the asyncpg pool the read path needs.
+
+app            = "dataquest-api"
+primary_region = "iad"               # set near the managed Postgres region
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  strategy        = "rolling"
+  # Run the Alembic migration ONCE in an ephemeral machine BEFORE the rollout (never in lifespan,
+  # which would race N machines). Needs DATABASE_URL injected (a Fly secret). env.py uses the sync DSN.
+  release_command = "alembic upgrade head"
+
+[env]
+  APP_ENV = "production"
+  # Non-secret config ONLY. DATABASE_URL (and FRED_API_KEY, if the worker ever runs here) are
+  # `fly secrets set` — never committed here. CORS_ORIGINS may be set here or as a secret.
+
+[http_service]
+  internal_port        = 8080        # MUST equal the uvicorn --port in the Dockerfile
+  force_https          = true
+  auto_stop_machines   = "stop"      # cost-friendly for a study deploy; prod warm-pool = "off"
+  auto_start_machines  = true
+  min_machines_running = 1           # prod zero-downtime rolling deploys want >= 2
+  processes            = ["app"]
+
+  [http_service.concurrency]
+    type       = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+  # Liveness check on /health (a trivial 200; upgrade to a SELECT-1 readiness check if you run >=2 machines).
+  [[http_service.checks]]
+    method       = "GET"
+    path         = "/health"
+    interval     = "15s"
+    timeout      = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size      = "shared-cpu-1x"        # I/O-bound read service; scale OUT (fly scale count) before UP
+  memory    = "512mb"
+  processes = ["app"]
+
+# Graceful shutdown: Fly SIGTERMs PID 1, waits kill_timeout, then SIGKILLs.
+# kill_timeout (30s) > uvicorn --timeout-graceful-shutdown (25s) so drain finishes first.
+kill_signal  = "SIGTERM"
+kill_timeout = "30s"

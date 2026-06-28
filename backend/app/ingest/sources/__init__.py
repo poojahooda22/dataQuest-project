@@ -1,0 +1,1 @@
+"""Data-source fetchers — one TET Fetcher per source (the only code that calls upstream)."""

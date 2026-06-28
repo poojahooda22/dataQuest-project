@@ -1,0 +1,15 @@
+[project]
+name = "dataquest-backend"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.138",
+    "uvicorn[standard]>=0.49",   # the web server that runs FastAPI
+    "sqlmodel>=0.0.22",          # the database models (tables as Python classes)
+    "psycopg[binary]>=3.2",      # the Postgres driver (how Python talks to Postgres)
+    "alembic>=1.13",             # database migrations (versioned schema changes)
+    "pydantic-settings>=2.5",    # typed config from environment variables
+    "httpx>=0.28",               # the HTTP client the worker uses to fetch data
+    "asyncpg>=0.31.0",
+    "openpyxl>=3.1.5",
+]

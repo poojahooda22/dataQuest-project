@@ -1,0 +1,2 @@
+// The DataQuest read API base. From VITE_BACKEND_URL (build-inlined by Vite); trailing slash trimmed.
+export const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL ?? "http://localhost:8000").replace(/\/+$/, "");
