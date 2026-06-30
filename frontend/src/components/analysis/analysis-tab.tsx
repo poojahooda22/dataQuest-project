@@ -17,7 +17,7 @@ import { useObservations } from "@/hooks/use-observations";
 import { CATEGORIES, categoryOf } from "@/lib/categories";
 import { computeOverview } from "@/lib/overview";
 import { seriesName } from "@/lib/series-name";
-import { applyTransform, transformDef, type TransformId } from "@/lib/transforms";
+import { applyTransform, transformDef, RELATE_TRANSFORMS, SERIES_TRANSFORMS, type TransformId } from "@/lib/transforms";
 import type { NamedSeries } from "@/lib/echart-util";
 import { cn } from "@/lib/utils";
 import type { Series } from "@/types/api";
@@ -31,6 +31,12 @@ const RegressionChart = lazy(() =>
   import("@/components/charts/regression").then((m) => ({ default: m.RegressionChart })),
 );
 const BubbleChart = lazy(() => import("@/components/charts/bubble").then((m) => ({ default: m.BubbleChart })));
+const SmallMultiples = lazy(() =>
+  import("@/components/charts/small-multiples").then((m) => ({ default: m.SmallMultiples })),
+);
+const CorrelationHeatmap = lazy(() =>
+  import("@/components/charts/correlation-heatmap").then((m) => ({ default: m.CorrelationHeatmap })),
+);
 
 const RANGES = ["1Y", "5Y", "10Y", "MAX"] as const;
 type Range = (typeof RANGES)[number];
@@ -40,6 +46,22 @@ function startForRange(range: Range): string | undefined {
   const years = range === "1Y" ? 1 : range === "5Y" ? 5 : 10;
   const d = new Date();
   d.setFullYear(d.getFullYear() - years);
+  return d.toISOString().slice(0, 10);
+}
+
+// Extra lookback (days) a lagged transform needs BEFORE the visible window to compute its first shown
+// point: "% change, year ago" needs a full prior year (so a 1Y view would otherwise be empty); the
+// period-over-period transforms need ~one period (a quarter covers the coarsest, quarterly, case).
+// Level/index need none — and index must NOT see the lookback, or its =100 base shifts off the window.
+function lookbackDaysFor(id: TransformId): number {
+  if (id === "pc1") return 430;
+  if (id === "pch" || id === "chg" || id === "logdiff") return 120;
+  return 0;
+}
+
+function minusDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - days);
   return d.toISOString().slice(0, 10);
 }
 
@@ -94,6 +116,35 @@ function SeriesPicker({
           {options.map((s) => (
             <SelectItem key={s.series_id} value={s.series_id}>
               {seriesName(s)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </label>
+  );
+}
+
+// A compact transform selector — choose how a series is expressed (level / % change / log change / …).
+function TransformSelect({
+  value,
+  onChange,
+  options,
+}: {
+  value: TransformId;
+  onChange: (v: TransformId) => void;
+  options: TransformId[];
+}) {
+  return (
+    <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+      <span>Transform</span>
+      <Select value={value} onValueChange={(v) => onChange(v as TransformId)}>
+        <SelectTrigger size="sm" className="w-[150px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((id) => (
+            <SelectItem key={id} value={id}>
+              {transformDef(id).label}
             </SelectItem>
           ))}
         </SelectContent>
@@ -192,6 +243,7 @@ export function AnalysisDashboard({
 
   // ── Widget Types: Normalized Performance chart (driven by the SGRID selection) ──
   const [range, setRange] = useState<Range>("5Y");
+  const [heroOverride, setHeroOverride] = useState<TransformId | undefined>(undefined);
   const chartRef = useRef<EChartHandle>(null);
   const scatterRef = useRef<EChartHandle>(null);
   const regressionRef = useRef<EChartHandle>(null);
@@ -206,12 +258,20 @@ export function AnalysisDashboard({
   const chartMeta = selected.length > 0 ? selected : defaultMeta;
   const chartTickers = useMemo(() => chartMeta.map((s) => s.series_id), [chartMeta]);
 
-  const start = startForRange(range);
-  const results = useCompare(chartTickers, start);
   // Rates/FX (regime B, already comparable units) → raw levels; revisable statistics → index to 100.
+  // That regime rule is the DEFAULT; an explicit user pick (heroOverride) wins. Resolve it BEFORE the
+  // fetch, because a lagged transform needs the fetch window widened by its lookback.
   const allMarket = chartMeta.length > 0 && chartMeta.every((s) => s.regime === "B");
-  const chartTransform: TransformId = allMarket ? "level" : "index";
+  const chartTransform: TransformId = heroOverride ?? (allMarket ? "level" : "index");
   const chartDef = transformDef(chartTransform);
+
+  // The range pills bound the DISPLAY window; for a lagged transform we fetch a lookback BEFORE it so the
+  // first shown point can be computed, then clip back to the window below. MAX (undefined start) already
+  // fetches everything, so no widening is needed there.
+  const displayStart = startForRange(range);
+  const lookbackDays = lookbackDaysFor(chartTransform);
+  const fetchStart = displayStart && lookbackDays ? minusDays(displayStart, lookbackDays) : displayStart;
+  const results = useCompare(chartTickers, fetchStart);
   const anyLoading = results.some((r) => r?.isLoading);
   const anyError = results.some((r) => r?.isError);
 
@@ -221,15 +281,33 @@ export function AnalysisDashboard({
   const named = useMemo<NamedSeries[]>(() => {
     return chartMeta.flatMap((s, i) => {
       const data = results[i]?.data;
-      return data ? [{ label: seriesName(s), points: applyTransform(data.observations, chartTransform, s.frequency) }] : [];
+      if (!data) return [];
+      let points = applyTransform(data.observations, chartTransform, s.frequency);
+      // Drop the lookback rows we fetched only to seed the lagged transform — show just the display window.
+      if (lookbackDays && displayStart) points = points.filter((p) => p.date >= displayStart);
+      return [{ label: seriesName(s), points }];
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `sig` captures tickers + range + transform + freshness
+  }, [sig]);
+
+  // Co-movement is ALWAYS computed on % change — a correlation of two trending LEVELS is the textbook
+  // spurious result. Clip to the display window so the matrix reflects the selected period.
+  const corrSeries = useMemo<NamedSeries[]>(() => {
+    return chartMeta.flatMap((s, i) => {
+      const data = results[i]?.data;
+      if (!data) return [];
+      let points = applyTransform(data.observations, "pch", s.frequency);
+      if (displayStart) points = points.filter((p) => p.date >= displayStart);
+      return [{ label: seriesName(s), points }];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `sig` captures tickers + range + freshness
   }, [sig]);
 
   // ── Advanced Charts: SELF-CONTAINED — its own X/Y/Size pickers, not the SGRID selection ──
   const [advX, setAdvX] = useState<string | undefined>(undefined);
   const [advY, setAdvY] = useState<string | undefined>(undefined);
   const [advZ, setAdvZ] = useState<string | undefined>(undefined);
+  const [advTransform, setAdvTransform] = useState<TransformId>("level");
   // Sensible defaults until the user picks; resolve once the catalog loads.
   const advDefaults = useMemo(() => {
     const want = ["USD_CPIAUCSL", "USD_GDPC1", "USD_PAYEMS"];
@@ -245,14 +323,17 @@ export function AnalysisDashboard({
   const advTickers = useMemo(() => [xId, yId, zId].filter(Boolean), [xId, yId, zId]);
   const advResults = useCompare(advTickers, startForRange("10Y")); // a 10Y window gives the relate views enough points
   const advMeta = useMemo(() => advTickers.map((id) => allSeries.find((s) => s.series_id === id)), [advTickers, allSeries]);
-  const advSig = `${advTickers.join(",")}|${advResults.map((r) => r?.dataUpdatedAt ?? 0).join(",")}`;
+  const advSig = `${advTickers.join(",")}|${advTransform}|${advResults.map((r) => r?.dataUpdatedAt ?? 0).join(",")}`;
   const advLeveled = useMemo<(NamedSeries | null)[]>(() => {
+    const suffix = advTransform === "level" ? "" : ` (${transformDef(advTransform).label})`;
     return advTickers.map((_id, i) => {
       const s = advMeta[i];
       const data = advResults[i]?.data;
-      return s && data ? { label: seriesName(s), points: applyTransform(data.observations, "level", s.frequency) } : null;
+      return s && data
+        ? { label: seriesName(s) + suffix, points: applyTransform(data.observations, advTransform, s.frequency) }
+        : null;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `advSig` captures tickers + data freshness
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `advSig` captures tickers + transform + data freshness
   }, [advSig]);
   const [advA, advB, advC] = advLeveled;
   const advBusy = advResults.some((r) => r?.isLoading);
@@ -273,6 +354,29 @@ export function AnalysisDashboard({
     if (advBusy && !advA) return <PanelLoading label="Loading..." />;
     if (ready) return <Suspense fallback={<PanelLoading label="Loading chart..." />}>{chart}</Suspense>;
     return <PanelEmpty title={emptyTitle} message={emptyMsg} />;
+  }
+
+  function smallMultiplesBody() {
+    if (anyError && named.length === 0) return <PanelError />;
+    if (anyLoading && named.length === 0) return <PanelLoading label="Loading..." />;
+    if (named.length === 0) return <PanelEmpty title="No data" message="Pick indicators from the table." />;
+    return (
+      <Suspense fallback={<PanelLoading label="Loading charts..." />}>
+        <SmallMultiples series={named} />
+      </Suspense>
+    );
+  }
+
+  function correlationBody() {
+    if (anyError && corrSeries.length === 0) return <PanelError />;
+    if (anyLoading && corrSeries.length === 0) return <PanelLoading label="Loading..." />;
+    if (corrSeries.length < 2)
+      return <PanelEmpty title="Need ≥2 series" message="Select at least two indicators to correlate." />;
+    return (
+      <Suspense fallback={<PanelLoading label="Loading chart..." />}>
+        <CorrelationHeatmap series={corrSeries} />
+      </Suspense>
+    );
   }
 
   const rangePills = (
@@ -334,7 +438,7 @@ export function AnalysisDashboard({
         </TabsList>
 
         {/* Widget Types — the data grid: the SGRID (wide) + the performance chart */}
-        <TabsContent value="widgets">
+        <TabsContent value="widgets" className="space-y-4">
           <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
             <Widget
               title={`Indicators · ${filteredStats.length}`}
@@ -354,16 +458,29 @@ export function AnalysisDashboard({
             </Widget>
 
             <Widget
-              title={allMarket ? "Levels (raw values)" : "Normalized · indexed to 100"}
+              title={
+                chartTransform === "index"
+                  ? "Normalized · indexed to 100"
+                  : chartTransform === "level"
+                    ? "Levels (raw values)"
+                    : chartDef.label
+              }
               action={
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                  <TransformSelect value={chartTransform} onChange={setHeroOverride} options={SERIES_TRANSFORMS} />
                   {rangePills}
-                  <ExportButton onClick={() => chartRef.current?.exportPNG(allMarket ? "levels" : "normalized")} />
+                  <ExportButton onClick={() => chartRef.current?.exportPNG(chartTransform)} />
                 </div>
               }
             >
               {heroBody()}
             </Widget>
+          </div>
+
+          {/* Second row — densify the board: faceted small multiples + the co-movement heatmap */}
+          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+            <Widget title="Small multiples">{smallMultiplesBody()}</Widget>
+            <Widget title="Correlation · % change">{correlationBody()}</Widget>
           </div>
         </TabsContent>
 
@@ -374,8 +491,9 @@ export function AnalysisDashboard({
             <SeriesPicker label="X" value={xId} onChange={setAdvX} options={allSeries} />
             <SeriesPicker label="Y" value={yId} onChange={setAdvY} options={allSeries} />
             <SeriesPicker label="Size" value={zId} onChange={setAdvZ} options={allSeries} />
+            <TransformSelect value={advTransform} onChange={setAdvTransform} options={RELATE_TRANSFORMS} />
             <div className="ml-auto">
-              <ExportBar rows={advA?.points ?? []} filename={`${advA?.label ?? "series"}_level`} />
+              <ExportBar rows={advA?.points ?? []} filename={`${advA?.label ?? "series"}_${advTransform}`} />
             </div>
           </div>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

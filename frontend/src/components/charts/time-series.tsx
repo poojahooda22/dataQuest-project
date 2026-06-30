@@ -85,7 +85,10 @@ export function TimeSeriesChart({
         showSymbol: false,
         sampling: "lttb" as const,
         lineStyle: { width: 2 },
-        ...(multi ? {} : { areaStyle: { opacity: 0.08 } }),
+        // Always set areaStyle explicitly. Series now MERGE by id across updates (see echart.tsx), so an
+        // OMITTED areaStyle would let a single-series fill stick on series[0] when the chart goes
+        // multi-series — set opacity 0 in the multi case rather than dropping the key.
+        areaStyle: { opacity: multi ? 0 : 0.08 },
       })),
     };
   }, [lines, unit, colors]);

@@ -11,6 +11,7 @@ export interface OverviewStat {
   chg1m: number | null; // percent
   chg3m: number | null;
   chg1y: number | null;
+  spark: number[]; // recent values (chronological) for the row's trend sparkline
 }
 
 function offsets(freq: string): { m1: number | null; m3: number | null; y1: number | null } {
@@ -60,6 +61,7 @@ export function computeOverview(series: Series[], records: QdfRecord[]): Overvie
       chg1m: pctChange(values, off.m1),
       chg3m: pctChange(values, off.m3),
       chg1y: pctChange(values, off.y1),
+      spark: values.slice(-120), // bounded recent window for the trend sparkline
     };
   });
 }

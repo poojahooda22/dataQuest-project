@@ -37,3 +37,19 @@ PIT_SQL_BULK = text(
     LIMIT :row_cap
     """
 )
+
+# ALL vintages of a series (NOT point-in-time): the full revision history of every observation in the
+# window, for the revision workbench (convergence curve + fixed-event track). There is NO
+# `vintage_date <= as_of` filter — we want every information-state, not the one known on a date. Ordered
+# (observation_date, vintage_date) so the read groups cleanly into each observation's release sequence
+# (first print -> ... -> latest). Walks ix_obs_pit (series_id leads), bounded by :row_cap.
+REVISIONS_SQL = text(
+    """
+    SELECT observation_date, vintage_date, value
+    FROM observation
+    WHERE series_id = :series_id
+      AND observation_date BETWEEN :start AND :end
+    ORDER BY observation_date, vintage_date
+    LIMIT :row_cap
+    """
+)

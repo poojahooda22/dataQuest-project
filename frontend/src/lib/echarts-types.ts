@@ -1,4 +1,9 @@
-import type { BarSeriesOption, LineSeriesOption, ScatterSeriesOption } from "echarts/charts";
+import type {
+  BarSeriesOption,
+  LineSeriesOption,
+  ScatterSeriesOption,
+  HeatmapSeriesOption,
+} from "echarts/charts";
 import type {
   GridComponentOption,
   TooltipComponentOption,
@@ -7,6 +12,7 @@ import type {
   TitleComponentOption,
   ToolboxComponentOption,
   AriaComponentOption,
+  VisualMapComponentOption,
 } from "echarts/components";
 import type { ComposeOption } from "echarts/core";
 
@@ -17,6 +23,7 @@ export type ECOption = ComposeOption<
   | BarSeriesOption
   | LineSeriesOption
   | ScatterSeriesOption
+  | HeatmapSeriesOption
   | GridComponentOption
   | TooltipComponentOption
   | LegendComponentOption
@@ -24,4 +31,5 @@ export type ECOption = ComposeOption<
   | TitleComponentOption
   | ToolboxComponentOption
   | AriaComponentOption
+  | VisualMapComponentOption
 >;

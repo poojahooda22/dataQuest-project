@@ -5,6 +5,7 @@ optionally bounded by start/end. Reads ONLY our store (read never fetches).
 """
 
 from datetime import date
+from itertools import groupby
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -12,7 +13,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.downsample import downsample_rows, lttb_indices
-from app.api.queries import PIT_SQL
+from app.api.queries import PIT_SQL, REVISIONS_SQL
+from app.api.revision_stats import compute_revision_stats
 from app.core.db import get_async_session
 from app.core.errors import CatalogNotFound, InvalidRequest, ResultTooLarge, SeriesDataNotFound
 
@@ -220,3 +222,138 @@ async def get_series_panel(
         summary=summary,
         points=points,
     )
+
+
+# ── Revision history (multi-vintage) — the workbench data source ──────────────────────────
+# Every information-state of each observation in the window (NOT point-in-time): how each number was
+# revised across successive vintages. Powers the convergence curve (mean abs revision by release age)
+# and the fixed-event track (one period across all its vintages). Regime-A (revisable) series only —
+# a market series (regime B) has one vintage per observation, so there is nothing to revise.
+
+
+class RevisionVintage(BaseModel):
+    vintage_date: date
+    value: float
+
+
+class RevisionObservation(BaseModel):
+    observation_date: date
+    vintages: list[RevisionVintage]  # ordered by vintage_date ASC (first print -> ... -> latest)
+
+
+class RevisionsResponse(BaseModel):
+    ticker: str
+    commercial_ok: bool
+    attribution: str
+    observations: list[RevisionObservation]
+
+
+@router.get("/{ticker}/revisions", response_model=RevisionsResponse, operation_id="get_series_revisions")
+async def get_series_revisions(
+    ticker: str,
+    start: date | None = None,
+    end: date | None = None,
+    session: AsyncSession = Depends(get_async_session),
+) -> RevisionsResponse:
+    """The full revision history of `ticker` over [start, end] — each observation's successive vintages."""
+    meta = (
+        await session.execute(
+            text("SELECT commercial_ok, attribution, vintage_capable FROM series WHERE series_id = :s"),
+            {"s": ticker},
+        )
+    ).first()
+    if meta is None:
+        raise CatalogNotFound(ticker)
+    if not meta.vintage_capable:
+        raise InvalidRequest(
+            f"'{ticker}' is not vintage-capable; revision history needs a revisable (regime A) series."
+        )
+
+    result = await session.execute(
+        REVISIONS_SQL,
+        {
+            "series_id": ticker,
+            "start": start or date(1900, 1, 1),
+            "end": end or date(9999, 12, 31),
+            "row_cap": MAX_ROWS + 1,
+        },
+    )
+    rows = result.all()
+    if len(rows) > MAX_ROWS:
+        raise ResultTooLarge(MAX_ROWS)
+    if not rows:
+        raise SeriesDataNotFound(ticker, "revisions")
+
+    # Rows are ordered (observation_date, vintage_date), so groupby yields each observation's release
+    # sequence in one pass (never gather/sort in app code — the SQL ORDER BY already did it).
+    observations = [
+        RevisionObservation(
+            observation_date=obs_date,
+            vintages=[RevisionVintage(vintage_date=r.vintage_date, value=r.value) for r in group],
+        )
+        for obs_date, group in groupby(rows, key=lambda r: r.observation_date)
+    ]
+    return RevisionsResponse(
+        ticker=ticker,
+        commercial_ok=bool(meta.commercial_ok),
+        attribution=meta.attribution or "",
+        observations=observations,
+    )
+
+
+# ── Revision statistics — the reliability readout + sample-AND-persistence-gated bias test ──
+# Computed server-side (HAC/EWC + a Student-t CDF belong in Python, not ECharts) over the same full
+# vintage history /revisions exposes. Pure-Python (no numpy/statsmodels); see app/api/revision_stats.py.
+# Returns a dict (the shape is nullable-heavy + has an `unavailable` variant) rather than a fixed model.
+
+
+@router.get("/{ticker}/revision-stats", operation_id="get_series_revision_stats")
+async def get_series_revision_stats(
+    ticker: str,
+    start: date | None = None,
+    end: date | None = None,
+    session: AsyncSession = Depends(get_async_session),
+) -> dict:
+    """Revision diagnostics (MR/MAR/RMSR, persistence, a gated bias test + a plain-language readout)."""
+    meta = (
+        await session.execute(
+            text("SELECT commercial_ok, attribution, vintage_capable, frequency FROM series WHERE series_id = :s"),
+            {"s": ticker},
+        )
+    ).first()
+    if meta is None:
+        raise CatalogNotFound(ticker)
+    if not meta.vintage_capable:
+        raise InvalidRequest(
+            f"'{ticker}' is not vintage-capable; revision stats need a revisable (regime A) series."
+        )
+
+    result = await session.execute(
+        REVISIONS_SQL,
+        {
+            "series_id": ticker,
+            "start": start or date(1900, 1, 1),
+            "end": end or date(9999, 12, 31),
+            "row_cap": MAX_ROWS + 1,
+        },
+    )
+    rows = result.all()
+    if len(rows) > MAX_ROWS:
+        raise ResultTooLarge(MAX_ROWS)
+
+    # Group into each observation's (vintage_date, value) sequence (ordered by observation_date, vintage_date).
+    observations = [
+        (obs_date, [(r.vintage_date, r.value) for r in group])
+        for obs_date, group in groupby(rows, key=lambda r: r.observation_date)
+    ]
+    # A strictly-positive-level series (e.g. a price index) makes sign-correctness trivially 1.0 -> suppress it.
+    strictly_positive = bool(observations) and all(v > 0 for _d, vv in observations for _vd, v in vv)
+
+    stats = compute_revision_stats(
+        observations,
+        frequency=meta.frequency or "M",
+        commercial_ok=bool(meta.commercial_ok),
+        attribution=meta.attribution or "",
+        strictly_positive_level=strictly_positive,
+    )
+    return {"ticker": ticker, **stats}

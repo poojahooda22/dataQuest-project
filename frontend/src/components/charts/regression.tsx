@@ -3,7 +3,8 @@ import { useMemo, type Ref } from "react";
 import { EChart, type EChartHandle } from "@/components/charts/echart";
 import { PanelEmpty } from "@/components/common/panel-state";
 import { useChartColors } from "@/lib/echarts-theme";
-import { alignByDate } from "@/lib/align";
+import { align } from "@/lib/align";
+import { AlignChip } from "@/components/charts/align-chip";
 import { linearRegression } from "@/lib/stats";
 import { paramValues, type NamedSeries } from "@/lib/echart-util";
 import { formatCompact, formatValue } from "@/lib/format";
@@ -23,11 +24,11 @@ export function RegressionChart({
   ref?: Ref<EChartHandle>;
 }) {
   const colors = useChartColors();
-  const rows = useMemo(() => alignByDate([x.points, y.points]), [x.points, y.points]);
+  const aligned = useMemo(() => align([x.points, y.points]), [x.points, y.points]);
 
   const option = useMemo<ECOption>(() => {
     const accent = colors.categorical[0] ?? colors.foreground;
-    const data = rows.flatMap((r) => {
+    const data = aligned.rows.flatMap((r) => {
       const a = r.values[0];
       const b = r.values[1];
       return a != null && b != null ? [[a, b] as [number, number]] : [];
@@ -104,15 +105,20 @@ export function RegressionChart({
           : []),
       ],
     };
-  }, [rows, x.label, y.label, colors]);
+  }, [aligned, x.label, y.label, colors]);
 
-  if (rows.length < 2) {
+  if (aligned.rows.length < 2) {
     return (
       <PanelEmpty
         title="Not enough overlapping points"
-        message="A fit needs at least two shared dates between the series."
+        message="A fit needs at least two aligned points between the series."
       />
     );
   }
-  return <EChart option={option} height={height} exportBackground={colors.card} ref={ref} />;
+  return (
+    <div className="flex h-full flex-col">
+      <EChart option={option} height={height} exportBackground={colors.card} ref={ref} />
+      <AlignChip meta={aligned.meta} labels={[x.label, y.label]} />
+    </div>
+  );
 }

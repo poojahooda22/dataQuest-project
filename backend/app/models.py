@@ -17,6 +17,7 @@ class Series(SQLModel, table=True):
     attribution: str = ""                     # "Source: U.S. BLS via ALFRED"
     frequency: str = "M"
     description: str = ""
+    qdf_ticker: str | None = None  # JPMaQS-grammar ticker (cid_BASE_ADJUSTMENT), e.g. "USD_CPI_SA"; NULL = not mapped
 
 
 class Observation(SQLModel, table=True):

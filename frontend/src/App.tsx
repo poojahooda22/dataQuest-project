@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Home, Telescope } from "lucide-react";
+import { Compass, Home, Telescope } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -15,16 +15,21 @@ import type { Health, Series } from "@/types/api";
 const RevisionComparison = lazy(() =>
   import("@/components/insights/revision-comparison").then((m) => ({ default: m.RevisionComparison })),
 );
+// Open Data Exploration — the catalog/discovery view (its own chunk).
+const DataExploration = lazy(() =>
+  import("@/components/explore/data-exploration").then((m) => ({ default: m.DataExploration })),
+);
 
 const MAX_SELECTED = 4;
 
-type View = "home" | "insights";
+type View = "home" | "insights" | "explore";
 
 // The sidebar is a FEATURES nav rail (Koyfin pattern): Home = the markets overview, Data Insights =
-// the vintage/revision studies. Not filters, not a working set — those live elsewhere.
+// the vintage/revision studies, Open Data Exploration = the catalog/discovery browser.
 const NAV: { id: View; label: string; icon: typeof Home }[] = [
   { id: "home", label: "Home", icon: Home },
   { id: "insights", label: "Data Insights", icon: Telescope },
+  { id: "explore", label: "Open Data Exploration", icon: Compass },
 ];
 
 // A live indicator that the dashboard can reach the read API — proves the spine end-to-end.
@@ -117,9 +122,13 @@ export default function App() {
     >
       {view === "home" ? (
         <AnalysisDashboard selected={selected} selectedIds={selectedIds} onToggle={toggle} search={search} />
-      ) : (
+      ) : view === "insights" ? (
         <Suspense fallback={<div className="px-6 pt-6 text-sm text-muted-foreground">Loading…</div>}>
           <RevisionComparison />
+        </Suspense>
+      ) : (
+        <Suspense fallback={<div className="px-6 pt-6 text-sm text-muted-foreground">Loading…</div>}>
+          <DataExploration />
         </Suspense>
       )}
     </AppShell>

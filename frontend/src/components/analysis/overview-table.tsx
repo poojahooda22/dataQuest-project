@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronsUpDown, Minus, Plus } from "lucide-react";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChangeCell } from "@/components/analysis/change-cell";
+import { ChangeCell, heatStyle } from "@/components/analysis/change-cell";
+import { Sparkline } from "@/components/charts/sparkline";
 import { PanelEmpty, PanelError, PanelLoading } from "@/components/common/panel-state";
 import { formatValue } from "@/lib/format";
 import type { OverviewStat } from "@/lib/overview";
@@ -126,6 +127,7 @@ export function OverviewTable({
         <TableRow className="hover:bg-transparent">
           <SortHeader label="Indicator" col="series_id" sort={sort} dir={dir} onSort={onSort} />
           <SortHeader label="Latest" col="latest" sort={sort} dir={dir} onSort={onSort} align="right" />
+          <TableHead className="px-3 text-muted-foreground">Trend</TableHead>
           <SortHeader label="1M" col="chg1m" sort={sort} dir={dir} onSort={onSort} align="right" />
           <SortHeader label="3M" col="chg3m" sort={sort} dir={dir} onSort={onSort} align="right" />
           <SortHeader label="1Y" col="chg1y" sort={sort} dir={dir} onSort={onSort} align="right" />
@@ -148,21 +150,24 @@ export function OverviewTable({
                 <div className="min-w-0">
                   <div className="truncate font-medium text-foreground">{seriesName(s)}</div>
                   <div className="truncate text-xs text-muted-foreground">
-                    {s.series_id} · {s.source} · {s.frequency}
+                    {s.qdf_ticker ?? s.series_id} · {s.frequency}
                   </div>
                 </div>
               </TableCell>
               <TableCell className="px-3 py-1.5 text-right tabular-nums">
                 {row.latest != null ? formatValue(row.latest) : "—"}
               </TableCell>
-              <TableCell className="px-3 py-1.5 text-right">
-                <ChangeCell v={row.chg1m} scale={scales.m1} />
+              <TableCell className="px-3 py-1.5">
+                <Sparkline values={row.spark} />
               </TableCell>
-              <TableCell className="px-3 py-1.5 text-right">
-                <ChangeCell v={row.chg3m} scale={scales.m3} />
+              <TableCell className="px-3 py-1.5 text-right" style={heatStyle(row.chg1m, scales.m1)}>
+                <ChangeCell v={row.chg1m} />
               </TableCell>
-              <TableCell className="px-3 py-1.5 text-right">
-                <ChangeCell v={row.chg1y} scale={scales.y1} />
+              <TableCell className="px-3 py-1.5 text-right" style={heatStyle(row.chg3m, scales.m3)}>
+                <ChangeCell v={row.chg3m} />
+              </TableCell>
+              <TableCell className="px-3 py-1.5 text-right" style={heatStyle(row.chg1y, scales.y1)}>
+                <ChangeCell v={row.chg1y} />
               </TableCell>
               <TableCell className="w-8 px-2 text-muted-foreground">
                 {active ? (

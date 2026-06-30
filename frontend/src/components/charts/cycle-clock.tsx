@@ -3,7 +3,8 @@ import { useMemo } from "react";
 import { EChart } from "@/components/charts/echart";
 import { PanelEmpty } from "@/components/common/panel-state";
 import { useChartColors } from "@/lib/echarts-theme";
-import { alignByDate } from "@/lib/align";
+import { align } from "@/lib/align";
+import { AlignChip } from "@/components/charts/align-chip";
 import { mean, paramValues, type NamedSeries } from "@/lib/echart-util";
 import { formatValue } from "@/lib/format";
 import type { ECOption } from "@/lib/echarts-types";
@@ -13,11 +14,11 @@ import type { ECOption } from "@/lib/echarts-types";
 // the latest point is marked. Descriptive (where in the cycle), never a directive call.
 export function CycleClock({ x, y, height = 440 }: { x: NamedSeries; y: NamedSeries; height?: number }) {
   const colors = useChartColors();
-  const rows = useMemo(() => alignByDate([x.points, y.points]), [x.points, y.points]);
+  const aligned = useMemo(() => align([x.points, y.points]), [x.points, y.points]);
 
   const option = useMemo<ECOption>(() => {
     const accent = colors.categorical[0] ?? colors.foreground;
-    const data = rows.flatMap((r) => {
+    const data = aligned.rows.flatMap((r) => {
       const a = r.values[0];
       const b = r.values[1];
       return a != null && b != null ? [[a, b] as [number, number]] : [];
@@ -97,10 +98,15 @@ export function CycleClock({ x, y, height = 440 }: { x: NamedSeries; y: NamedSer
         },
       ],
     };
-  }, [rows, x.label, y.label, colors]);
+  }, [aligned, x.label, y.label, colors]);
 
-  if (rows.length < 2) {
-    return <PanelEmpty title="No overlapping dates" message="A cycle plot needs two series sharing dates." />;
+  if (aligned.rows.length < 2) {
+    return <PanelEmpty title="No overlap in time" message="These series don't overlap in the selected window." />;
   }
-  return <EChart option={option} height={height} />;
+  return (
+    <div className="flex h-full flex-col">
+      <EChart option={option} height={height} />
+      <AlignChip meta={aligned.meta} labels={[x.label, y.label]} />
+    </div>
+  );
 }

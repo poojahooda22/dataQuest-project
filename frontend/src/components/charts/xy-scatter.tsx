@@ -3,7 +3,8 @@ import { useMemo, type Ref } from "react";
 import { EChart, type EChartHandle } from "@/components/charts/echart";
 import { PanelEmpty } from "@/components/common/panel-state";
 import { useChartColors } from "@/lib/echarts-theme";
-import { alignByDate } from "@/lib/align";
+import { align } from "@/lib/align";
+import { AlignChip } from "@/components/charts/align-chip";
 import { paramValues, type NamedSeries } from "@/lib/echart-util";
 import { formatCompact, formatValue } from "@/lib/format";
 import type { ECOption } from "@/lib/echarts-types";
@@ -22,11 +23,11 @@ export function XYScatter({
   ref?: Ref<EChartHandle>;
 }) {
   const colors = useChartColors();
-  const rows = useMemo(() => alignByDate([x.points, y.points]), [x.points, y.points]);
+  const aligned = useMemo(() => align([x.points, y.points]), [x.points, y.points]);
 
   const option = useMemo<ECOption>(() => {
     const accent = colors.categorical[0] ?? colors.foreground;
-    const data = rows.flatMap((r) => {
+    const data = aligned.rows.flatMap((r) => {
       const a = r.values[0];
       const b = r.values[1];
       return a != null && b != null ? [[a, b] as [number, number]] : [];
@@ -70,15 +71,20 @@ export function XYScatter({
       },
       series: [{ type: "scatter", data, symbolSize: 7, itemStyle: { color: accent, opacity: 0.7 } }],
     };
-  }, [rows, x.label, y.label, colors]);
+  }, [aligned, x.label, y.label, colors]);
 
-  if (rows.length === 0) {
+  if (aligned.rows.length === 0) {
     return (
       <PanelEmpty
-        title="No overlapping dates"
-        message="These series don't share enough dates to relate. Try two series of the same frequency."
+        title="No overlap in time"
+        message="These series don't overlap in the selected window."
       />
     );
   }
-  return <EChart option={option} height={height} exportBackground={colors.card} ref={ref} />;
+  return (
+    <div className="flex h-full flex-col">
+      <EChart option={option} height={height} exportBackground={colors.card} ref={ref} />
+      <AlignChip meta={aligned.meta} labels={[x.label, y.label]} />
+    </div>
+  );
 }

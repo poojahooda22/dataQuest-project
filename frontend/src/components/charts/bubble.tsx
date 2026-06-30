@@ -3,7 +3,8 @@ import { useMemo, type Ref } from "react";
 import { EChart, type EChartHandle } from "@/components/charts/echart";
 import { PanelEmpty } from "@/components/common/panel-state";
 import { useChartColors } from "@/lib/echarts-theme";
-import { alignByDate } from "@/lib/align";
+import { align } from "@/lib/align";
+import { AlignChip } from "@/components/charts/align-chip";
 import { paramValues, type NamedSeries } from "@/lib/echart-util";
 import { formatCompact, formatValue } from "@/lib/format";
 import type { ECOption } from "@/lib/echarts-types";
@@ -24,11 +25,14 @@ export function BubbleChart({
   ref?: Ref<EChartHandle>;
 }) {
   const colors = useChartColors();
-  const rows = useMemo(() => alignByDate([x.points, y.points, size.points]), [x.points, y.points, size.points]);
+  const aligned = useMemo(
+    () => align([x.points, y.points, size.points]),
+    [x.points, y.points, size.points],
+  );
 
   const option = useMemo<ECOption>(() => {
     const accent = colors.categorical[0] ?? colors.foreground;
-    const data = rows.flatMap((r) => {
+    const data = aligned.rows.flatMap((r) => {
       const a = r.values[0];
       const b = r.values[1];
       const c = r.values[2];
@@ -85,10 +89,15 @@ export function BubbleChart({
         },
       ],
     };
-  }, [rows, x.label, y.label, size.label, colors]);
+  }, [aligned, x.label, y.label, size.label, colors]);
 
-  if (rows.length === 0) {
-    return <PanelEmpty title="No overlapping dates" message="A bubble chart needs three series sharing dates." />;
+  if (aligned.rows.length === 0) {
+    return <PanelEmpty title="No overlap in time" message="These three series don't overlap in the selected window." />;
   }
-  return <EChart option={option} height={height} exportBackground={colors.card} ref={ref} />;
+  return (
+    <div className="flex h-full flex-col">
+      <EChart option={option} height={height} exportBackground={colors.card} ref={ref} />
+      <AlignChip meta={aligned.meta} labels={[x.label, y.label, size.label]} />
+    </div>
+  );
 }

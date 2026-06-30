@@ -20,6 +20,7 @@ export interface Series {
   attribution: string;
   frequency: string;
   description: string;
+  qdf_ticker?: string | null; // JPMaQS-grammar ticker, e.g. "USD_CPI_SA" (null = not mapped)
 }
 
 /** One observation inside a point-in-time series response. */
@@ -76,3 +77,75 @@ export interface PanelResponse {
   summary: PanelSummary;
   points: PanelPoint[];
 }
+
+/** One information-state of an observation: the value as it was known on `vintage_date`. */
+export interface RevisionVintage {
+  vintage_date: string;
+  value: number;
+}
+
+/** One observation's full revision history — successive vintages, ordered first-print → latest. */
+export interface RevisionObservation {
+  observation_date: string;
+  vintages: RevisionVintage[];
+}
+
+/** GET /series/{ticker}/revisions — every vintage of every observation. Carries the licence gate. */
+export interface RevisionsResponse {
+  ticker: string;
+  commercial_ok: boolean;
+  attribution: string;
+  observations: RevisionObservation[];
+}
+
+/** The gated bias significance test inside the revision-stats payload. */
+export interface RevisionBiasTest {
+  verdict: "test" | "estimate_only" | "insufficient" | "no_variation";
+  gate_reason: "low_n" | "high_persistence" | null;
+  n: number;
+  df_b?: number;
+  rho_hat_1?: number | null;
+  mr?: number;
+  bias_se?: number;
+  p_value: number | null;
+  ci_low?: number;
+  ci_high?: number;
+  ci_level?: number;
+  mde?: number;
+  significant: boolean | null;
+  size_note?: string | null;
+  se_method?: string;
+}
+
+/** GET /series/{ticker}/revision-stats — the reliability readout + gated bias test (computed values). */
+export interface RevisionStats {
+  ticker: string;
+  N: number;
+  mode: string;
+  horizon_days: number;
+  benchmark_excluded: number;
+  n_revision_events: number;
+  all_zero_revisions: boolean;
+  rho_hat_1: number | null;
+  mr: number;
+  mar: number;
+  rmsr: number;
+  sd_r: number | null;
+  noise_to_signal: number | null;
+  frac_correct_sign: number | null;
+  bias_test: RevisionBiasTest;
+  commercial_ok: boolean;
+  attribution: string;
+  readout: string;
+}
+
+/** The `N == 0` variant — no revisable observations; a typed unavailable, never fabricated stats. */
+export interface RevisionStatsUnavailable {
+  ticker: string;
+  status: "unavailable";
+  reason: string;
+  N: number;
+  commercial_ok: boolean;
+}
+
+export type RevisionStatsResponse = RevisionStats | RevisionStatsUnavailable;

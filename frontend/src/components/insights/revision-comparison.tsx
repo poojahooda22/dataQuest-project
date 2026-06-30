@@ -5,10 +5,16 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TimeSeriesChart } from "@/components/charts/time-series";
 import { RevisionBars } from "@/components/charts/revision-bars";
+import { ConvergenceCurve } from "@/components/charts/convergence-curve";
+import { RevisionTrack } from "@/components/charts/revision-track";
+import { ReliabilityCard } from "@/components/insights/reliability-card";
 import { ProvenanceLine } from "@/components/common/provenance-line";
 import { PanelEmpty, PanelError, PanelLoading } from "@/components/common/panel-state";
 import { useCatalog } from "@/hooks/use-catalog";
 import { usePanel } from "@/hooks/use-panel";
+import { useRevisions } from "@/hooks/use-revisions";
+import { useRevisionStats } from "@/hooks/use-revision-stats";
+import { convergenceCurve, eventTrack, mostRevised } from "@/lib/revisions";
 import { seriesName } from "@/lib/series-name";
 import { formatValue } from "@/lib/format";
 import type { NamedSeries } from "@/lib/echart-util";
@@ -48,6 +54,21 @@ export function RevisionComparison() {
   const panel = usePanel(activeTicker || undefined, vintageA, vintageB || undefined);
   const data = panel.data;
   const meta = vintageSeries.find((s) => s.series_id === activeTicker);
+
+  // ── The vintage workbench (multi-vintage): convergence curve + fixed-event track ──
+  const revStart = useMemo(() => yearsAgo(12), []);
+  const revisions = useRevisions(activeTicker || undefined, revStart);
+  const revStats = useRevisionStats(activeTicker || undefined);
+  const revObs = useMemo(() => revisions.data?.observations ?? [], [revisions.data]);
+  const convergence = useMemo(() => convergenceCurve(revObs), [revObs]);
+  const periodOptions = useMemo(
+    () => revObs.map((o) => o.observation_date).sort((a, b) => b.localeCompare(a)),
+    [revObs],
+  );
+  const [period, setPeriod] = useState<string | undefined>(undefined);
+  const defaultPeriod = useMemo(() => mostRevised(revObs), [revObs]);
+  const activePeriod = period && periodOptions.includes(period) ? period : defaultPeriod;
+  const track = useMemo(() => (activePeriod ? eventTrack(revObs, activePeriod) : []), [revObs, activePeriod]);
 
   const lines = useMemo<NamedSeries[]>(() => {
     const pts = data?.points ?? [];
@@ -107,6 +128,72 @@ export function RevisionComparison() {
           />
           <span className="text-muted-foreground/70">(blank = today)</span>
         </label>
+      </div>
+
+      {/* ── The vintage workbench (multi-vintage) — the moat screens ── */}
+      <Card className="flex flex-col">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Reliability — can you trust the first print?</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ReliabilityCard data={revStats.data} isLoading={revStats.isLoading} isError={revStats.isError} />
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card className="flex flex-col">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">
+              Convergence — how fast {meta ? seriesName(meta) : "the number"} settles
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {revisions.isError ? (
+              <PanelError />
+            ) : revisions.isLoading && !revisions.data ? (
+              <PanelLoading label="Loading revision history..." />
+            ) : (
+              <ConvergenceCurve points={convergence} />
+            )}
+            <p className="px-1 pt-2 text-[11px] leading-tight text-muted-foreground">
+              Mean absolute revision (% of the latest value) still remaining at each release — lower means
+              the early prints are trustworthy. Includes benchmark rebasing, not only data revisions.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="flex flex-col">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Revision track — one period across every vintage</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">Period</span>
+              <Select value={activePeriod ?? ""} onValueChange={setPeriod}>
+                <SelectTrigger size="sm" className="w-[150px]">
+                  <SelectValue placeholder="Pick a period" />
+                </SelectTrigger>
+                <SelectContent>
+                  {periodOptions.map((d) => (
+                    <SelectItem key={d} value={d}>
+                      {d}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {track.length > 0 ? (
+                <span className="text-xs text-muted-foreground/70">{track.length} vintages</span>
+              ) : null}
+            </div>
+            {revisions.isError ? (
+              <PanelError />
+            ) : revisions.isLoading && !revisions.data ? (
+              <PanelLoading label="Loading revision history..." />
+            ) : (
+              <RevisionTrack points={track} />
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* body */}

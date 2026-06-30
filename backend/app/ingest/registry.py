@@ -188,3 +188,31 @@ FETCHERS = {
     "ECB": EcbFetcher(),
     "PHILLYFED": PhillyFedRtdsFetcher(),
 }
+
+# The JPMaQS-grammar QDF ticker per series, so our /api/v1/qdf output loads in the open `macrosynergy`
+# package. Grammar = cid_BASE_ADJUSTMENT (their verified terms: cid, base, NSA/SA). We use PURE grammar
+# (no transform suffix, no level marker) — a ticker with no transform IS the level, the honest way to say
+# "raw level, transform it yourself". The bases are our OWN honest names IN their grammar (JPMaQS's exact
+# bases are paywalled; we never guess them). T10Y2Y's `SPREAD` base is honest (it IS a derived spread).
+QDF_TICKERS: dict[str, str] = {
+    # Inflation
+    "USD_CPIAUCSL": "USD_CPI_SA", "USD_CPILFESL": "USD_CPIC_SA", "USD_PCEPI": "USD_PCE_SA",
+    "USD_PCEPILFE": "USD_PCEC_SA", "USD_PPIACO": "USD_PPI_NSA",
+    # Labor
+    "USD_UNRATE": "USD_UNEMPLRATE_SA", "USD_PAYEMS": "USD_EMPL_SA", "USD_CIVPART": "USD_LFPRATE_SA",
+    "USD_ICSA": "USD_INITCLAIMS_SA", "USD_AHETPI": "USD_WAGE_SA", "USD_JTSJOL": "USD_JOBOPEN_SA",
+    # Growth / activity
+    "USD_GDPC1": "USD_RGDP_SA", "USD_INDPRO": "USD_IP_SA", "USD_RSAFS": "USD_RETAIL_SA",
+    "USD_HOUST": "USD_HSTARTS_SA", "USD_DGORDER": "USD_DGORDERS_SA",
+    # Philadelphia Fed RTDS (distinct bases from the ALFRED twins: ROUTPUT≠RGDP, RUCRATE≠UNEMPLRATE, EMPLOY≠EMPL)
+    "USD_ROUTPUT": "USD_ROUTPUT_SA", "USD_RUC": "USD_RUCRATE_SA", "USD_EMPLOY": "USD_EMPLOY_SA",
+    # Rates (market observables → NSA)
+    "USD_DGS10": "USD_GB10YYLD_NSA", "USD_DGS2": "USD_GB02YYLD_NSA", "USD_DGS3MO": "USD_GB03MYLD_NSA",
+    "USD_FEDFUNDS": "USD_FFRATE_NSA", "USD_T10Y2Y": "USD_GB10V02SPREAD_NSA",
+    # FX
+    "EUR_FXUSD": "EUR_FXUSD_NSA",
+}
+
+# Stamp each catalog row with its QDF ticker (unmapped → None = not served on /api/v1/qdf).
+for _s in V1_SERIES:
+    _s.qdf_ticker = QDF_TICKERS.get(_s.series_id)

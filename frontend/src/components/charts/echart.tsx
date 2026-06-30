@@ -62,10 +62,21 @@ export function EChart({
   }, []);
 
   useEffect(() => {
-    // replaceMerge the SERIES so a changed series set never leaks across updates via index-merge
-    // (e.g. a single-series `areaStyle` sticking on series[0] when the chart later goes multi-series,
-    // or ghost lines when the count shrinks). Everything else MERGES, so the user's dataZoom survives.
-    chart.current?.setOption(option, { lazyUpdate: true, replaceMerge: ["series"] });
+    const inst = chart.current;
+    if (!inst) return;
+    // Give every series a stable id so a pure restyle (e.g. a theme flip: new colors → rebuilt option)
+    // MERGES into the live series instead of re-creating it. Under replaceMerge, ECharts only merges a
+    // series it can match by id; an id-less series is rebuilt as brand-new and replays its entrance
+    // animation — that is the theme-toggle "redraw then reappear" flicker. With ids, a recolor updates
+    // in place, while series dropped from the set are still removed (no ghost lines when the count
+    // shrinks) and everything non-series still MERGES, so the user's dataZoom survives.
+    // `title` is also replace-merged: a title PRESENT in one option and ABSENT in the next must be
+    // cleared, not kept (merge keeps it → a ghost title overlapping the axis). Affects the conditional
+    // regression R² title and the (title-less) small multiples.
+    const series = Array.isArray(option.series)
+      ? option.series.map((s, i) => ({ ...s, id: s.id ?? `s${i}` }))
+      : option.series;
+    inst.setOption({ ...option, series }, { lazyUpdate: true, replaceMerge: ["series", "title"] });
   }, [option]);
 
   return <div ref={el} style={{ width: "100%", height }} className={className} />;

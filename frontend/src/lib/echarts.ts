@@ -2,7 +2,7 @@
 // are bundled (the full barrel is ~520KB gzip; this set is far smaller). It is lazy-loaded as a
 // chunk (see analysis components), so it never weighs on the initial route.
 import * as echarts from "echarts/core";
-import { BarChart, LineChart, ScatterChart } from "echarts/charts";
+import { BarChart, LineChart, ScatterChart, HeatmapChart } from "echarts/charts";
 import {
   GridComponent,
   TooltipComponent,
@@ -11,6 +11,7 @@ import {
   TitleComponent,
   ToolboxComponent,
   AriaComponent,
+  VisualMapComponent,
   MarkLineComponent,
   MarkPointComponent,
 } from "echarts/components";
@@ -21,6 +22,7 @@ echarts.use([
   BarChart,
   LineChart,
   ScatterChart,
+  HeatmapChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,
@@ -28,6 +30,7 @@ echarts.use([
   TitleComponent,
   ToolboxComponent,
   AriaComponent,
+  VisualMapComponent,
   MarkLineComponent,
   MarkPointComponent,
   LabelLayout,
