@@ -96,8 +96,8 @@ export default function App() {
     <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
       {/* brand */}
       <div className="flex h-14 shrink-0 items-center gap-2 px-4">
-        <DataQuestMark className="size-5 text-foreground" />
-        <DataQuestWordmark className="text-base" />
+        <DataQuestMark className="size-7 text-primary" />
+        <DataQuestWordmark className="text-xl" />
       </div>
 
       {/* primary nav */}

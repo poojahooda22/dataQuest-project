@@ -1,14 +1,19 @@
 import { cn } from "@/lib/utils";
 
-// The DataQuest mark: nested arcs = successive information-states ("vintages") of a series —
-// the point-in-time motif. Drawn with currentColor so it inherits text color and themes.
 export function DataQuestMark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" className={cn("size-5", className)} aria-hidden="true">
-      <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.3" />
-      <path d="M6 12a6 6 0 0 1 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.6" />
-      <path d="M8 12a4 4 0 0 1 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+    <svg viewBox="0 0 24 24" fill="none" className={cn("size-6", className)} aria-hidden="true">
+      <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.8"/>
+      <path d="M12 12l8-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.6"/>
+      <path d="M12 12v9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.6"/>
+      <path d="M12 12L4 7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.6"/>
+      <circle cx="12" cy="12" r="2.5" fill="currentColor" />
+      <circle cx="12" cy="3" r="1.5" fill="currentColor" />
+      <circle cx="20" cy="7.5" r="1.5" fill="currentColor" />
+      <circle cx="20" cy="16.5" r="1.5" fill="currentColor" />
+      <circle cx="12" cy="21" r="1.5" fill="currentColor" />
+      <circle cx="4" cy="16.5" r="1.5" fill="currentColor" />
+      <circle cx="4" cy="7.5" r="1.5" fill="currentColor" />
     </svg>
   );
 }
