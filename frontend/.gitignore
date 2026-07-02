@@ -8,3 +8,4 @@ dist-ssr
 # editor / OS
 .DS_Store
 *.log
+.vercel

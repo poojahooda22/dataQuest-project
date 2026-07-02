@@ -80,8 +80,14 @@ export function RevisionComparison() {
     return out;
   }, [data]);
 
+  // Only the periods that ACTUALLY changed between the two vintages — a "revision per period" strip
+  // should show revisions, not hundreds of zero-bars for periods that were already final (those would
+  // stretch the time axis across the whole history and crush the real revisions into the right edge).
   const revPoints = useMemo(
-    () => (data?.points ?? []).flatMap((p) => (p.revision != null ? [{ date: p.observation_date, value: p.revision }] : [])),
+    () =>
+      (data?.points ?? []).flatMap((p) =>
+        p.revision != null && p.revision !== 0 ? [{ date: p.observation_date, value: p.revision }] : [],
+      ),
     [data],
   );
 
@@ -233,7 +239,7 @@ export function RevisionComparison() {
               {revPoints.length ? (
                 <RevisionBars points={revPoints} height={200} />
               ) : (
-                <PanelEmpty title="No overlap" message="No periods are present in both vintages to revise." />
+                <PanelEmpty title="No revisions" message="No period changed between these two vintages." />
               )}
             </CardContent>
           </Card>

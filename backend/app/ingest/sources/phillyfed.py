@@ -11,8 +11,11 @@ Two things differ from the API fetchers:
   2. It is Regime A (revisable) WITH a real vintage archive — like ALFRED, but file-based and
      free of the FRED API contract.
 
-Licence: a Federal Reserve research dataset (public). `commercial_ok` stays FALSE until the RTDS
-terms are first-party read and ledgered GREEN (same discipline as the ALFRED caveat).
+Licence (RTDS terms read first-party, logged in sources-ledger): the data is © Federal Reserve Bank
+of Philadelphia ("All rights reserved"; no terms-of-use page, no redistribution grant). A regional
+Reserve Bank is NOT a federal agency, so 17 USC §105 public-domain does NOT apply to the vintage
+compilation. Display/chart with attribution is the intended research use; DOWNLOAD / file-redistribution
+is RED. `commercial_ok` stays FALSE and any future `downloadable` gate stays FALSE.
 """
 
 import io

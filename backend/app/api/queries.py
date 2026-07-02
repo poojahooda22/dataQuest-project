@@ -38,6 +38,23 @@ PIT_SQL_BULK = text(
     """
 )
 
+# The CHANGES feed: per series, the newest vintage (publication) date and how many new information-states
+# arrived after :since. vintage_date IS the upstream publication event, so this reads "what the sources
+# published recently" straight off the append-only store — no event table needed. Whole-table aggregate:
+# fine at this scale (guarded by the read engine's statement_timeout); materialize/cron-warm at Tier 2.
+CHANGES_SQL = text(
+    """
+    SELECT series_id,
+           MAX(vintage_date) AS latest_vintage,
+           COUNT(*) FILTER (WHERE vintage_date > :since) AS new_observations
+    FROM observation
+    GROUP BY series_id
+    HAVING COUNT(*) FILTER (WHERE vintage_date > :since) > 0
+    ORDER BY MAX(vintage_date) DESC
+    LIMIT :row_cap
+    """
+)
+
 # ALL vintages of a series (NOT point-in-time): the full revision history of every observation in the
 # window, for the revision workbench (convergence curve + fixed-event track). There is NO
 # `vintage_date <= as_of` filter — we want every information-state, not the one known on a date. Ordered

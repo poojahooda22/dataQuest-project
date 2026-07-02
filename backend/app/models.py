@@ -3,6 +3,20 @@ from datetime import date
 from sqlmodel import Field, SQLModel
 
 
+class DataProduct(SQLModel, table=True):
+    """A Fusion-style DATA PRODUCT: a named grouping of related series.
+
+    The grouping level of the ontology — Catalog -> Data Product -> Dataset (Series) -> Distribution.
+    Code-seeded in the registry and worker-upserted, exactly like the series catalog.
+    """
+
+    product_id: str = Field(primary_key=True)   # slug, e.g. "us-inflation"
+    title: str                                  # human label, e.g. "US Inflation"
+    description: str = ""
+    theme: str = ""                             # the asset-class/theme facet, e.g. "Inflation"
+    sort_order: int = 0                         # display order in the product tree
+
+
 class Series(SQLModel, table=True):
     """The CATALOG: one row per indicator."""
 
@@ -13,11 +27,14 @@ class Series(SQLModel, table=True):
     source_series_id: str                     # the upstream id, e.g. "CPIAUCSL"
     regime: str                               # "A" revisable | "B" market
     vintage_capable: bool = False
-    commercial_ok: bool = False               # licence gate — default FALSE (provenance NN2)
+    commercial_ok: bool = False               # DISPLAY licence — cleared for commercial display (default FALSE)
+    downloadable: bool = False                # REDISTRIBUTION gate — cleared to hand out as a file (default FALSE)
     attribution: str = ""                     # "Source: U.S. BLS via ALFRED"
     frequency: str = "M"
     description: str = ""
+    unit: str | None = None  # the value's unit ("%", "index", "thousands of persons", ...); NULL = unstated
     qdf_ticker: str | None = None  # JPMaQS-grammar ticker (cid_BASE_ADJUSTMENT), e.g. "USD_CPI_SA"; NULL = not mapped
+    product_id: str | None = Field(default=None, foreign_key="dataproduct.product_id", index=True)  # the Data Product this series belongs to; NULL = ungrouped
 
 
 class Observation(SQLModel, table=True):

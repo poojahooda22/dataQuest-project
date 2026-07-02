@@ -1,16 +1,18 @@
 import { cn } from "@/lib/utils";
 
-// The per-series commercial-DISPLAY licence verdict — DataQuest's one genuinely unique surface. No free
-// incumbent (FRED / ALFRED / OpenBB / DBnomics) renders a per-series commercial-license verdict. We do.
+// The per-series commercial-DISPLAY licence verdict, rendered straight from the backend `commercial_ok`
+// gate (never re-derived in the UI). A per-series usage label is not itself unique — FRED publishes a
+// per-series copyright/usage label too; the distinguishing verdict is the fetch-path split (a source can
+// be display-GREEN yet file-redistribution-RED), which is what a downstream redistributor actually needs.
 //
-// The verdict IS the backend `commercial_ok` gate (never re-derived in the UI): GREEN = cleared for
-// commercial display (public-domain / CC-BY / licensed, with attribution rendered); RED = open data that
-// is free to VIEW but not cleared for commercial redistribution (a source ToS held pending first-party
-// review). The attribution string is shown on hover — required for CC-BY/ECB and good practice always.
+// GREEN = cleared for commercial display (public-domain / CC-BY / licensed, with attribution rendered);
+// RED = the DISPLAY axis is restricted — research/personal display only (e.g. an all-rights-reserved
+// source with no reuse grant). File REDISTRIBUTION is the separate `downloadable` gate, not this chip.
+// The attribution string is shown on hover — required for CC-BY/ECB, good practice always.
 export function LicenseChip({ ok, attribution }: { ok: boolean; attribution?: string }) {
   const title = ok
     ? `GREEN — cleared for commercial display.${attribution ? " " + attribution : ""}`
-    : `RED — open data, free to view; not cleared for commercial redistribution (source ToS pending review).${
+    : `RED — research/personal display only; the source licence does not clear commercial display.${
         attribution ? " " + attribution : ""
       }`;
   return (

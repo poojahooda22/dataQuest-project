@@ -32,8 +32,12 @@ export function RevisionBars({ points, height = 200 }: { points: { date: string;
         textStyle: { color: colors.foreground },
         valueFormatter: (v) => (typeof v === "number" ? formatValue(v) : String(v ?? "")),
       },
+      // CATEGORY axis (not time): we plot only the few periods that actually changed, so a continuous
+      // time axis would scatter 2-4 bars across decades with vast empty gaps (and give the bars no width
+      // basis). One slot per revised period = evenly-spaced, readable bars.
       xAxis: {
-        type: "time",
+        type: "category",
+        data: points.map((p) => p.date),
         axisLine: { lineStyle: { color: colors.border } },
         axisLabel: { color: colors.muted },
         splitLine: { show: false },
@@ -48,7 +52,7 @@ export function RevisionBars({ points, height = 200 }: { points: { date: string;
         {
           type: "bar",
           data: points.map((p) => ({
-            value: [p.date, p.value] as [string, number],
+            value: p.value,
             itemStyle: { color: p.value >= 0 ? pos : neg },
           })),
         },

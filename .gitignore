@@ -3,6 +3,7 @@
 .agents/
 .cursor/
 .gemini/
+.cache/
 graphify-out/
 CLAUDE.md
 AGENTS.md
@@ -27,6 +28,11 @@ GEMINI.md
 **/dist/
 **/dist-ssr/
 **/.vite/
+
+# ── E2E test artifacts (Playwright) ──
+**/test-results/
+**/playwright-report/
+**/playwright/.cache/
 
 # ── OS / editor ──
 .DS_Store

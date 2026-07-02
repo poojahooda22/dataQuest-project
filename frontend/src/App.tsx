@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Compass, Home, Telescope } from "lucide-react";
+import { Compass, Home, Library, Telescope } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -19,15 +19,29 @@ const RevisionComparison = lazy(() =>
 const DataExploration = lazy(() =>
   import("@/components/explore/data-exploration").then((m) => ({ default: m.DataExploration })),
 );
+// Data Catalog — the Fusion-style product-cards browse (its own chunk).
+const CatalogTab = lazy(() =>
+  import("@/components/catalog/catalog-tab").then((m) => ({ default: m.CatalogTab })),
+);
 
 const MAX_SELECTED = 4;
 
-type View = "home" | "insights" | "explore";
+// Add a series to the working set as a FIFO window: already-present → unchanged; otherwise append and,
+// if that exceeds the cap, drop the OLDEST (first-in) so the newest is always kept and the set holds at
+// MAX_SELECTED. This is why clicking a 5th indicator (from the catalog or the SGRID) no longer no-ops.
+function addFifo(cur: Series[], s: Series): Series[] {
+  if (cur.some((x) => x.series_id === s.series_id)) return cur;
+  const next = [...cur, s];
+  return next.length > MAX_SELECTED ? next.slice(next.length - MAX_SELECTED) : next;
+}
+
+type View = "home" | "insights" | "explore" | "catalog";
 
 // The sidebar is a FEATURES nav rail (Koyfin pattern): Home = the markets overview, Data Insights =
 // the vintage/revision studies, Open Data Exploration = the catalog/discovery browser.
 const NAV: { id: View; label: string; icon: typeof Home }[] = [
   { id: "home", label: "Home", icon: Home },
+  { id: "catalog", label: "Data Catalog", icon: Library },
   { id: "insights", label: "Data Insights", icon: Telescope },
   { id: "explore", label: "Open Data Exploration", icon: Compass },
 ];
@@ -66,11 +80,17 @@ export default function App() {
   const toggle = (s: Series) =>
     setSelected((cur) =>
       cur.some((x) => x.series_id === s.series_id)
-        ? cur.filter((x) => x.series_id !== s.series_id)
-        : cur.length >= MAX_SELECTED
-          ? cur
-          : [...cur, s],
+        ? cur.filter((x) => x.series_id !== s.series_id) // already selected → deselect (toggle off)
+        : addFifo(cur, s), // not selected → add, FIFO-evicting the oldest if already at the cap
     );
+
+  // The catalog→analysis handoff: clicking a series in Open Data Exploration ADDS it to the working set
+  // (FIFO-evicting the oldest if at the cap, never toggling it off) and jumps to Home so the user lands
+  // on it charted.
+  const openInHome = (s: Series) => {
+    setSelected((cur) => addFifo(cur, s));
+    setView("home");
+  };
 
   const sidebar = (
     <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
@@ -112,7 +132,9 @@ export default function App() {
       sidebar={sidebar}
       header={
         <div className="flex flex-1 items-center gap-3">
-          <SearchBox value={search} onChange={setSearch} />
+          {/* One global search drives Home + Explore (both list surfaces). Hidden on Data Insights (a
+              single study) and Data Catalog (navigated by the product tree, not a flat search). */}
+          {view === "home" || view === "explore" ? <SearchBox value={search} onChange={setSearch} /> : null}
           <div className="ml-auto flex items-center gap-3">
             <HealthBadge />
             <ThemeToggle />
@@ -122,13 +144,17 @@ export default function App() {
     >
       {view === "home" ? (
         <AnalysisDashboard selected={selected} selectedIds={selectedIds} onToggle={toggle} search={search} />
+      ) : view === "catalog" ? (
+        <Suspense fallback={<div className="px-6 pt-6 text-sm text-muted-foreground">Loading…</div>}>
+          <CatalogTab search={search} onOpenInHome={openInHome} />
+        </Suspense>
       ) : view === "insights" ? (
         <Suspense fallback={<div className="px-6 pt-6 text-sm text-muted-foreground">Loading…</div>}>
           <RevisionComparison />
         </Suspense>
       ) : (
         <Suspense fallback={<div className="px-6 pt-6 text-sm text-muted-foreground">Loading…</div>}>
-          <DataExploration />
+          <DataExploration search={search} onOpenInHome={openInHome} />
         </Suspense>
       )}
     </AppShell>

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ImageDown } from "lucide-react";
 
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -258,6 +258,14 @@ export function AnalysisDashboard({
   const chartMeta = selected.length > 0 ? selected : defaultMeta;
   const chartTickers = useMemo(() => chartMeta.map((s) => s.series_id), [chartMeta]);
 
+  // The regime-aware default transform is the DEFAULT; a user pick (heroOverride) overrides it. Clear
+  // that override when the charted SELECTION changes, so a new set re-applies its regime default —
+  // otherwise a stale "level" pick would silently disable the auto-index on the next selection forever.
+  const chartKey = chartTickers.join(",");
+  useEffect(() => {
+    setHeroOverride(undefined);
+  }, [chartKey]);
+
   // Rates/FX (regime B, already comparable units) → raw levels; revisable statistics → index to 100.
   // That regime rule is the DEFAULT; an explicit user pick (heroOverride) wins. Resolve it BEFORE the
   // fetch, because a lagged transform needs the fetch window widened by its lookback.
@@ -439,6 +447,11 @@ export function AnalysisDashboard({
 
         {/* Widget Types — the data grid: the SGRID (wide) + the performance chart */}
         <TabsContent value="widgets" className="space-y-4">
+          {selected.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Showing 4 example indicators — pick rows from the table to chart your own.
+            </p>
+          ) : null}
           <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
             <Widget
               title={`Indicators · ${filteredStats.length}`}
@@ -487,7 +500,7 @@ export function AnalysisDashboard({
         {/* Advanced Charts — self-contained: its OWN series pickers drive the relate views */}
         <TabsContent value="advanced">
           <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card/40 px-3 py-2">
-            <span className="text-xs text-muted-foreground">Relate any series:</span>
+            <span className="text-xs text-muted-foreground">Does one series drive another?</span>
             <SeriesPicker label="X" value={xId} onChange={setAdvX} options={allSeries} />
             <SeriesPicker label="Y" value={yId} onChange={setAdvY} options={allSeries} />
             <SeriesPicker label="Size" value={zId} onChange={setAdvZ} options={allSeries} />
@@ -505,7 +518,7 @@ export function AnalysisDashboard({
                 !!(advA && advB),
                 advA && advB ? <XYScatter ref={scatterRef} x={advA} y={advB} height={CHART_H} /> : null,
                 "Pick series",
-                "Choose an X and Y series above.",
+                "Choose two series to compare — e.g. CPI vs Payrolls.",
               )}
             </Widget>
             <Widget
@@ -516,7 +529,7 @@ export function AnalysisDashboard({
                 !!(advA && advB),
                 advA && advB ? <RegressionChart ref={regressionRef} x={advA} y={advB} height={CHART_H} /> : null,
                 "Pick series",
-                "Choose an X and Y series above.",
+                "Choose two series to compare — e.g. CPI vs Payrolls.",
               )}
             </Widget>
             <Widget
@@ -527,7 +540,7 @@ export function AnalysisDashboard({
                 !!(advA && advB && advC),
                 advA && advB && advC ? <BubbleChart ref={bubbleRef} x={advA} y={advB} size={advC} height={CHART_H} /> : null,
                 "Pick 3 series",
-                "Bubble needs X, Y and Size.",
+                "Pick three series — X, Y, and bubble size.",
               )}
             </Widget>
           </div>

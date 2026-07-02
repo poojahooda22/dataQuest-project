@@ -12,11 +12,13 @@ from sqlmodel import Session
 from app.core.db import engine
 from app.ingest.errors import EmptyData, NeedsKey, Unavailable
 from app.ingest.load import load_rows
-from app.ingest.registry import FETCHERS, V1_SERIES
+from app.ingest.registry import DATA_PRODUCTS, FETCHERS, V1_SERIES
 
 
 def upsert_catalog(session: Session) -> None:
-    """Insert/update the catalog rows — the 'menu' of series the API can serve."""
+    """Insert/update the catalog rows — the 'menu' of products + series the API can serve."""
+    for product in DATA_PRODUCTS:  # products FIRST — series.product_id references them (FK)
+        session.merge(product)
     for series in V1_SERIES:
         session.merge(series)  # insert if new, update if it already exists
     session.commit()

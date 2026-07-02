@@ -29,7 +29,10 @@ engine = create_engine(
 # --- ASYNC engine: the read API request path. ---
 # Uses asyncpg (not psycopg-async): psycopg's async mode can't run on Windows's default
 # ProactorEventLoop, and asyncpg works on Windows + Linux. Same DSN, different driver.
-_async_url = settings.database_url.replace("+psycopg", "+asyncpg")
+# SSL param translation: libpq/psycopg spells it `sslmode=require`; the asyncpg dialect wants
+# `ssl=require` and REJECTS `sslmode` (TypeError at connect → a 500 on every query). One env DSN
+# (psycopg-spelled, e.g. RDS with ?sslmode=require) must serve both engines, so translate here.
+_async_url = settings.database_url.replace("+psycopg", "+asyncpg").replace("sslmode=", "ssl=")
 async_engine = create_async_engine(
     _async_url,
     pool_pre_ping=True,

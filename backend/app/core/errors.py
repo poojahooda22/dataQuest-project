@@ -58,6 +58,12 @@ class CatalogNotFound(DomainError):
                          f"No series '{series_id}' in the catalog.")
 
 
+class ProductNotFound(DomainError):
+    def __init__(self, product_id: str) -> None:
+        super().__init__(404, "product-not-found", "Data product not found",
+                         f"No data product '{product_id}' in the catalog.")
+
+
 class SeriesDataNotFound(DomainError):
     def __init__(self, series_id: str, as_of: object) -> None:
         super().__init__(404, "series-data-not-found", "No data for series at that vintage",
@@ -81,6 +87,14 @@ class SeriesLicensingGated(DomainError):
         super().__init__(403, "series-licensing-gated",
                          "Series not licensed for this surface",
                          f"'{series_id}' is not cleared for commercial display.")
+
+
+class DownloadNotLicensed(DomainError):
+    def __init__(self, series_id: str) -> None:
+        super().__init__(403, "download-not-licensed",
+                         "Series not licensed for file download",
+                         f"'{series_id}' is view/query only — the source licence does not permit "
+                         "redistributing it as a file. Query it via the JSON API instead.")
 
 
 class UpstreamUnavailable(DomainError):

@@ -16,11 +16,61 @@ export interface Series {
   source_series_id: string;
   regime: string; // "A" revisable | "B" market
   vintage_capable: boolean;
-  commercial_ok: boolean;
+  commercial_ok: boolean; // cleared for commercial DISPLAY
+  downloadable: boolean; // cleared to redistribute as a FILE
   attribution: string;
   frequency: string;
   description: string;
+  unit?: string | null; // the value's unit ("%", "index", ...); null = unstated
   qdf_ticker?: string | null; // JPMaQS-grammar ticker, e.g. "USD_CPI_SA" (null = not mapped)
+  product_id?: string | null; // the Data Product this series belongs to (null = ungrouped)
+}
+
+/** A Data Product summary — GET /products. The catalog grouping level (Catalog -> Data Product -> Dataset). */
+export interface DataProductSummary {
+  product_id: string;
+  title: string;
+  description: string;
+  theme: string;
+  sort_order: number;
+  dataset_count: number;
+  commercial_ok: boolean; // roll-up: true only if EVERY dataset is commercial_ok (contamination AND)
+}
+
+/** GET /products/{id} — one Data Product + its datasets. */
+export interface ProductDetail extends DataProductSummary {
+  datasets: Series[];
+}
+
+/** One recently-updated series — GET /catalog/changes. vintage_date IS the publication event. */
+export interface CatalogChange {
+  series: Series;
+  latest_vintage: string; // the newest publication (vintage) date in the store
+  new_observations: number; // information-states published after `since`
+}
+
+/** GET /catalog/changes — what the sources published recently. */
+export interface CatalogChangesResponse {
+  since: string;
+  changes: CatalogChange[];
+}
+
+/** One field of a dataset's data dictionary — GET /datasets/{ticker}/attributes. */
+export interface DatasetAttribute {
+  identifier: string;
+  title: string;
+  dataType: string;
+  isDatasetKey: boolean;
+  description: string;
+  source: string;
+}
+
+/** GET /datasets/{ticker}/attributes — the data dictionary. Carries the licence gate. */
+export interface DatasetAttributesResponse {
+  ticker: string;
+  commercial_ok: boolean;
+  attribution: string;
+  attributes: DatasetAttribute[];
 }
 
 /** One observation inside a point-in-time series response. */
