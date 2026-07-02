@@ -18,7 +18,7 @@ export function AppShell({
     <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
       {sidebar}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-4">
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background pl-8 px-4">
           {header}
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>

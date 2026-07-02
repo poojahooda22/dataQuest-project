@@ -36,10 +36,19 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 // Data Insights · Revision Comparison — the diff-two-vintages study on GET /series/{ticker}/panel.
 // Pick a revisable series and two information-state dates; see how the number changed after first print.
-export function RevisionComparison() {
+// The global top-bar `search` filters the series picker (consistent with every other view).
+export function RevisionComparison({ search = "" }: { search?: string }) {
   const catalog = useCatalog();
   const allSeries = useMemo(() => catalog.data ?? [], [catalog.data]);
   const vintageSeries = useMemo(() => allSeries.filter((s) => s.vintage_capable), [allSeries]);
+  const pickerOptions = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return vintageSeries;
+    const hits = vintageSeries.filter((s) =>
+      [seriesName(s), s.qdf_ticker ?? s.series_id, s.description].some((t) => t?.toLowerCase().includes(needle)),
+    );
+    return hits.length ? hits : vintageSeries; // never leave the picker empty — search narrows, not locks out
+  }, [vintageSeries, search]);
 
   const [ticker, setTicker] = useState<string | undefined>(undefined);
   const [vintageA, setVintageA] = useState<string>(yearsAgo(4));
@@ -102,7 +111,8 @@ export function RevisionComparison() {
         </p>
       </div>
 
-      {/* controls */}
+      {/* controls — the SERIES drives every card on this page; the two comparison dates live down in
+          the "Vintage comparison" section they actually control (they do not affect the cards above). */}
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card/40 px-3 py-2">
         <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
           Series
@@ -111,28 +121,13 @@ export function RevisionComparison() {
               <SelectValue placeholder="Pick a revisable series" />
             </SelectTrigger>
             <SelectContent>
-              {vintageSeries.map((s) => (
+              {pickerOptions.map((s) => (
                 <SelectItem key={s.series_id} value={s.series_id}>
                   {seriesName(s)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-        </label>
-        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          As known on
-          <Input type="date" value={vintageA} onChange={(e) => setVintageA(e.target.value)} className="h-8 w-[150px]" />
-        </label>
-        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          vs
-          <Input
-            type="date"
-            value={vintageB}
-            onChange={(e) => setVintageB(e.target.value)}
-            className="h-8 w-[150px]"
-            aria-label="Second vintage (blank = today)"
-          />
-          <span className="text-muted-foreground/70">(blank = today)</span>
         </label>
       </div>
 
@@ -200,6 +195,28 @@ export function RevisionComparison() {
             )}
           </CardContent>
         </Card>
+      </div>
+
+      {/* ── Vintage comparison — the diff-two-vintages study. The date controls sit HERE because they
+             drive exactly this section (the summary, the overlay, and the revision strip below). ── */}
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card/40 px-3 py-2">
+        <span className="text-sm font-semibold text-foreground">Vintage comparison</span>
+        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          As known on
+          <Input type="date" value={vintageA} onChange={(e) => setVintageA(e.target.value)} className="h-8 w-[150px]" />
+        </label>
+        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          vs
+          <Input
+            type="date"
+            value={vintageB}
+            onChange={(e) => setVintageB(e.target.value)}
+            className="h-8 w-[150px]"
+            aria-label="Second vintage (blank = today)"
+          />
+          <span className="text-muted-foreground/70">(blank = today)</span>
+        </label>
+        {panel.isFetching ? <span className="text-xs text-muted-foreground">updating…</span> : null}
       </div>
 
       {/* body */}

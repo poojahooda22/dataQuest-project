@@ -1,5 +1,4 @@
 import { lazy, Suspense, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Compass, Home, Library, Telescope } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
@@ -7,9 +6,8 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { DataQuestMark, DataQuestWordmark } from "@/components/brand";
 import { AnalysisDashboard } from "@/components/analysis/analysis-tab";
 import { SearchBox } from "@/components/layout/search-box";
-import { getJson } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import type { Health, Series } from "@/types/api";
+import type { Series } from "@/types/api";
 
 // Data Insights view — its own code-split chunk (keeps its ECharts imports out of the initial bundle).
 const RevisionComparison = lazy(() =>
@@ -45,31 +43,6 @@ const NAV: { id: View; label: string; icon: typeof Home }[] = [
   { id: "insights", label: "Data Insights", icon: Telescope },
   { id: "explore", label: "Open Data Exploration", icon: Compass },
 ];
-
-// A live indicator that the dashboard can reach the read API — proves the spine end-to-end.
-function HealthBadge() {
-  const { data, isLoading } = useQuery({
-    queryKey: ["health"],
-    queryFn: () => getJson<Health>("/health"),
-    retry: 1,
-    staleTime: 30_000,
-  });
-  const ok = data?.status === "ok";
-  const state = isLoading ? "checking…" : ok ? "connected" : "offline";
-  return (
-    <span className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:inline-flex" title={`API: ${state}`}>
-      <span
-        className={cn(
-          "size-2 rounded-full",
-          isLoading && "animate-pulse bg-muted-foreground/40",
-          ok && "bg-emerald-500",
-          !isLoading && !ok && "bg-destructive",
-        )}
-      />
-      API {state}
-    </span>
-  );
-}
 
 export default function App() {
   const [view, setView] = useState<View>("home");
@@ -132,11 +105,10 @@ export default function App() {
       sidebar={sidebar}
       header={
         <div className="flex flex-1 items-center gap-3">
-          {/* One global search drives Home + Explore (both list surfaces). Hidden on Data Insights (a
-              single study) and Data Catalog (navigated by the product tree, not a flat search). */}
-          {view === "home" || view === "explore" ? <SearchBox value={search} onChange={setSearch} /> : null}
+          {/* ONE global search, on every view: filters the Home grid, the Catalog products/datasets,
+              the Insights series picker, and the Explore table alike. */}
+          <SearchBox value={search} onChange={setSearch} />
           <div className="ml-auto flex items-center gap-3">
-            <HealthBadge />
             <ThemeToggle />
           </div>
         </div>
@@ -150,7 +122,7 @@ export default function App() {
         </Suspense>
       ) : view === "insights" ? (
         <Suspense fallback={<div className="px-6 pt-6 text-sm text-muted-foreground">Loading…</div>}>
-          <RevisionComparison />
+          <RevisionComparison search={search} />
         </Suspense>
       ) : (
         <Suspense fallback={<div className="px-6 pt-6 text-sm text-muted-foreground">Loading…</div>}>
