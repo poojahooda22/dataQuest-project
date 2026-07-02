@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
 
+import { ArrowRight } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,11 +21,28 @@ import { convergenceCurve, eventTrack, mostRevised } from "@/lib/revisions";
 import { seriesName } from "@/lib/series-name";
 import { formatValue } from "@/lib/format";
 import type { NamedSeries } from "@/lib/echart-util";
+import type { PanelPoint } from "@/types/api";
 
 function yearsAgo(n: number): string {
   const d = new Date();
   d.setFullYear(d.getFullYear() - n);
   return d.toISOString().slice(0, 10);
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function monthLabel(iso: string): string {
+  const [y, m] = iso.split("-");
+  const mi = Number(m) - 1;
+  return mi >= 0 && mi < 12 ? `${MONTHS[mi]} ${y}` : iso;
+}
+
+// Revision as a % of the earlier level — the honest "how big was this change" scale.
+function pctChange(a: number | null, b: number | null): number | null {
+  if (a == null || b == null || a === 0) return null;
+  return ((b - a) / Math.abs(a)) * 100;
+}
+function fmtPct(p: number | null): string {
+  return p == null ? "—" : `${p >= 0 ? "+" : ""}${p.toFixed(2)}%`;
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -99,6 +119,37 @@ export function RevisionComparison({ search = "" }: { search?: string }) {
       ),
     [data],
   );
+
+  // The single most-revised period in the current comparison — the headline readout. It changes
+  // visibly the moment the dates change, so the calendar's effect is unmissable even for a series
+  // (like CPI) whose revisions are tiny and vanish in the overlay chart.
+  const headline = useMemo<PanelPoint | null>(() => {
+    let best: PanelPoint | null = null;
+    for (const p of data?.points ?? []) {
+      if (p.revision != null && p.revision !== 0 && p.value_a != null && p.value_b != null) {
+        if (!best || Math.abs(p.revision) > Math.abs(best.revision ?? 0)) best = p;
+      }
+    }
+    return best;
+  }, [data]);
+  const headlinePct = headline ? pctChange(headline.value_a, headline.value_b) : null;
+  const headlineUp = (headline?.revision ?? 0) >= 0;
+
+  // Adaptive one-liner — answers "what is the point of these dates?" against the actual numbers:
+  // a big mover reads as "provisional first print"; a tiny one reads as "reliable — and that's the finding".
+  const explainer = useMemo(() => {
+    if (!data) return "";
+    const s = data.summary;
+    const name = meta ? seriesName(meta) : "this series";
+    if (s.n_revised === 0) {
+      return `Nothing changed between these two dates — every period was already final as known on ${data.vintage_a}.`;
+    }
+    const hp = headline ? pctChange(headline.value_a, headline.value_b) : null;
+    if (hp != null && Math.abs(hp) < 0.5) {
+      return `Revisions to ${name} are small (largest ${Math.abs(hp).toFixed(2)}% of level) — the early prints were reliable, which is itself the finding. Try GDP or payrolls to see large revisions.`;
+    }
+    return `${s.n_revised} of ${s.n_compared} periods moved after first print — the advance readings were provisional. Move the "As known on" date to compare against a different information-state.`;
+  }, [data, headline, meta]);
 
   const fmt = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? "—" : formatValue(v));
 
@@ -197,73 +248,108 @@ export function RevisionComparison({ search = "" }: { search?: string }) {
         </Card>
       </div>
 
-      {/* ── Vintage comparison — the diff-two-vintages study. The date controls sit HERE because they
-             drive exactly this section (the summary, the overlay, and the revision strip below). ── */}
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card/40 px-3 py-2">
-        <span className="text-sm font-semibold text-foreground">Vintage comparison</span>
-        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          As known on
-          <Input type="date" value={vintageA} onChange={(e) => setVintageA(e.target.value)} className="h-8 w-[150px]" />
-        </label>
-        <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          vs
-          <Input
-            type="date"
-            value={vintageB}
-            onChange={(e) => setVintageB(e.target.value)}
-            className="h-8 w-[150px]"
-            aria-label="Second vintage (blank = today)"
-          />
-          <span className="text-muted-foreground/70">(blank = today)</span>
-        </label>
-        {panel.isFetching ? <span className="text-xs text-muted-foreground">updating…</span> : null}
-      </div>
-
-      {/* body */}
-      {panel.isError ? (
-        <PanelError />
-      ) : panel.isLoading && !data ? (
-        <PanelLoading label="Loading revision comparison..." />
-      ) : !data || lines.length === 0 ? (
-        <PanelEmpty title="No data" message="No vintages for this series in the chosen window." />
-      ) : (
-        <>
-          {/* summary */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            <Stat label="Observations compared" value={String(data.summary.n_compared)} />
-            <Stat label="Revised" value={String(data.summary.n_revised)} />
-            <Stat label="Mean revision" value={fmt(data.summary.mean_revision)} />
-            <Stat label="Mean abs revision" value={fmt(data.summary.mean_abs_revision)} />
-            <Stat label="Max abs revision" value={fmt(data.summary.max_abs_revision)} />
+      {/* ── Vintage comparison — ONE self-contained card. The two date pickers sit in its header and
+             drive everything inside it; the headline readout directly below them changes the instant a
+             date changes, so the control's effect is obvious. This is the ONLY surface the dates drive —
+             the studies above use the full revision history and are series-driven. ── */}
+      <Card className="flex flex-col">
+        <CardHeader className="gap-3 pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle className="text-sm">
+              Vintage comparison — {meta ? seriesName(meta) : activeTicker}
+            </CardTitle>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                As known on
+                <Input
+                  type="date"
+                  value={vintageA}
+                  onChange={(e) => setVintageA(e.target.value)}
+                  className="h-8 w-[150px]"
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                vs
+                <Input
+                  type="date"
+                  value={vintageB}
+                  onChange={(e) => setVintageB(e.target.value)}
+                  className="h-8 w-[150px]"
+                  aria-label="Second vintage (blank = today)"
+                />
+                <span className="text-muted-foreground/70">(blank = today)</span>
+              </label>
+              {panel.isFetching ? <span className="text-xs text-muted-foreground">updating…</span> : null}
+            </div>
           </div>
-
-          {/* vintage overlay */}
-          <Card className="flex flex-col">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">{meta ? seriesName(meta) : activeTicker} — vintage overlay</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <TimeSeriesChart lines={lines} unit="value" height={360} />
-            </CardContent>
-          </Card>
-
-          {/* revision strip */}
-          <Card className="flex flex-col">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Revision per period (vintage B − vintage A)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {revPoints.length ? (
-                <RevisionBars points={revPoints} height={200} />
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {panel.isError ? (
+            <PanelError />
+          ) : panel.isLoading && !data ? (
+            <PanelLoading label="Loading revision comparison..." />
+          ) : !data || lines.length === 0 ? (
+            <PanelEmpty title="No data" message="No vintages for this series in the chosen window." />
+          ) : (
+            <>
+              {/* headline — the single most-revised period; visibly changes when the dates change */}
+              {headline ? (
+                <div className="rounded-lg border border-border bg-secondary/40 p-4">
+                  <div className="text-xs text-muted-foreground">
+                    Biggest revision in this window · {monthLabel(headline.observation_date)}
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <span className="text-xs text-muted-foreground">as known {data.vintage_a}</span>
+                    <span className="text-xl font-semibold tabular-nums">{fmt(headline.value_a)}</span>
+                    <ArrowRight className="size-4 self-center text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">as known {data.vintage_b}</span>
+                    <span className="text-xl font-semibold tabular-nums">{fmt(headline.value_b)}</span>
+                    <Badge variant="badge" color={headlineUp ? "success" : "error"} size="sm">
+                      {headlineUp ? "+" : ""}
+                      {fmt(headline.revision)} ({fmtPct(headlinePct)})
+                    </Badge>
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{explainer}</p>
+                </div>
               ) : (
-                <PanelEmpty title="No revisions" message="No period changed between these two vintages." />
+                <PanelEmpty
+                  title="No revisions"
+                  message="Every period was already final as of the earlier date — nothing was revised."
+                />
               )}
-            </CardContent>
-          </Card>
 
-          <ProvenanceLine attribution={`${data.ticker}: ${data.attribution}`} />
-        </>
-      )}
+              {/* summary */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                <Stat label="Observations compared" value={String(data.summary.n_compared)} />
+                <Stat label="Revised" value={String(data.summary.n_revised)} />
+                <Stat label="Mean revision" value={fmt(data.summary.mean_revision)} />
+                <Stat label="Mean abs revision" value={fmt(data.summary.mean_abs_revision)} />
+                <Stat label="Max abs revision" value={fmt(data.summary.max_abs_revision)} />
+              </div>
+
+              {/* vintage overlay */}
+              <div>
+                <div className="mb-1 text-sm font-medium text-foreground">Vintage overlay</div>
+                <TimeSeriesChart lines={lines} unit="value" height={360} />
+              </div>
+
+              {/* revision strip */}
+              <div>
+                <div className="mb-1 text-sm font-medium text-foreground">
+                  Revision per period (later − earlier)
+                </div>
+                {revPoints.length ? (
+                  <RevisionBars points={revPoints} height={200} />
+                ) : (
+                  <PanelEmpty title="No revisions" message="No period changed between these two vintages." />
+                )}
+              </div>
+
+              <ProvenanceLine attribution={`${data.ticker}: ${data.attribution}`} />
+            </>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
