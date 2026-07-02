@@ -22,12 +22,12 @@ export function ProductCard({
       type="button"
       onClick={() => onOpen(product.product_id)}
       className={cn(
-        "group flex h-full flex-col rounded-xl border border-border bg-card p-5 text-left shadow-sm",
+        "group flex h-full w-full flex-col rounded-xl border border-border bg-card p-5 text-left shadow-sm",
         "transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md",
         "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
       )}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-center justify-between gap-2">
         <div className={cn("flex size-11 items-center justify-center rounded-lg", tv.tint)}>
           <Icon className={cn("size-5", tv.accent)} strokeWidth={1.75} />
         </div>

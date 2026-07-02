@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from "react";
+import { MotionConfig } from "motion/react";
 import { Compass, Home, Library, Telescope } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
@@ -6,6 +7,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { DataQuestMark, DataQuestWordmark } from "@/components/brand";
 import { AnalysisDashboard } from "@/components/analysis/analysis-tab";
 import { SearchBox } from "@/components/layout/search-box";
+import { PageRise } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
 import type { Series } from "@/types/api";
 
@@ -101,6 +103,7 @@ export default function App() {
   );
 
   return (
+    <MotionConfig reducedMotion="user">
     <AppShell
       sidebar={sidebar}
       header={
@@ -114,21 +117,25 @@ export default function App() {
         </div>
       }
     >
-      {view === "home" ? (
-        <AnalysisDashboard selected={selected} selectedIds={selectedIds} onToggle={toggle} search={search} />
-      ) : view === "catalog" ? (
-        <Suspense fallback={<div className="px-6 pt-6 text-sm text-muted-foreground">Loading…</div>}>
-          <CatalogTab search={search} onOpenInHome={openInHome} />
-        </Suspense>
-      ) : view === "insights" ? (
-        <Suspense fallback={<div className="px-6 pt-6 text-sm text-muted-foreground">Loading…</div>}>
-          <RevisionComparison search={search} />
-        </Suspense>
-      ) : (
-        <Suspense fallback={<div className="px-6 pt-6 text-sm text-muted-foreground">Loading…</div>}>
-          <DataExploration search={search} onOpenInHome={openInHome} />
-        </Suspense>
-      )}
+      {/* Every view enters with the same quiet rise (keyed by view so switches re-run it). */}
+      <PageRise key={view}>
+        {view === "home" ? (
+          <AnalysisDashboard selected={selected} selectedIds={selectedIds} onToggle={toggle} search={search} />
+        ) : view === "catalog" ? (
+          <Suspense fallback={<div className="px-6 pt-6 text-sm text-muted-foreground">Loading…</div>}>
+            <CatalogTab search={search} onOpenInHome={openInHome} />
+          </Suspense>
+        ) : view === "insights" ? (
+          <Suspense fallback={<div className="px-6 pt-6 text-sm text-muted-foreground">Loading…</div>}>
+            <RevisionComparison search={search} />
+          </Suspense>
+        ) : (
+          <Suspense fallback={<div className="px-6 pt-6 text-sm text-muted-foreground">Loading…</div>}>
+            <DataExploration search={search} onOpenInHome={openInHome} />
+          </Suspense>
+        )}
+      </PageRise>
     </AppShell>
+    </MotionConfig>
   );
 }

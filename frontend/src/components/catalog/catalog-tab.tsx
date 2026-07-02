@@ -8,6 +8,7 @@ import { ProductDetail } from "@/components/catalog/product-detail";
 import { RecentChanges } from "@/components/catalog/recent-changes";
 import { PanelEmpty, PanelError, PanelLoading } from "@/components/common/panel-state";
 import { Badge } from "@/components/ui/badge";
+import { Stagger, StaggerItem } from "@/components/ui/motion";
 import { useProducts } from "@/hooks/use-products";
 import { BACKEND_URL } from "@/lib/config";
 import type { Series } from "@/types/api";
@@ -83,11 +84,13 @@ export function CatalogTab({
               message={needle ? "No data products match the search." : "The catalog has no data products yet."}
             />
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {visible.map((p) => (
-                <ProductCard key={p.product_id} product={p} onOpen={setSelected} />
+                <StaggerItem key={p.product_id} className="h-full">
+                  <ProductCard product={p} onOpen={setSelected} />
+                </StaggerItem>
               ))}
-            </div>
+            </Stagger>
           )}
 
           {!needle ? <RecentChanges onOpenDataset={setDataset} /> : null}
