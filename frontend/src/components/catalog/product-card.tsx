@@ -1,5 +1,3 @@
-import { ArrowRight } from "lucide-react";
-
 import { LicenseChip } from "@/components/common/license-chip";
 import { themeVisual } from "@/lib/theme-visual";
 import { cn } from "@/lib/utils";
@@ -45,10 +43,6 @@ export function ProductCard({
         <span className="font-semibold tabular-nums text-foreground">{product.dataset_count}</span>
         <span className="ml-1 text-muted-foreground">
           dataset{product.dataset_count === 1 ? "" : "s"}
-        </span>
-        <span className="ml-auto flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors group-hover:text-foreground">
-          Open
-          <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
         </span>
       </div>
     </button>
