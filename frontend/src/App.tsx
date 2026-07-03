@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo, useState } from "react";
 import { MotionConfig } from "motion/react";
-import { Compass, Home, Library, Telescope } from "lucide-react";
+import { Compass, Home, Library, Scale, Telescope } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -23,6 +23,10 @@ const DataExploration = lazy(() =>
 const CatalogTab = lazy(() =>
   import("@/components/catalog/catalog-tab").then((m) => ({ default: m.CatalogTab })),
 );
+// Index Lab — rules-based index construction (its own chunk; keeps its motion/table code out of initial).
+const IndexLabTab = lazy(() =>
+  import("@/components/index-lab/index-lab-tab").then((m) => ({ default: m.IndexLabTab })),
+);
 
 const MAX_SELECTED = 4;
 
@@ -35,13 +39,14 @@ function addFifo(cur: Series[], s: Series): Series[] {
   return next.length > MAX_SELECTED ? next.slice(next.length - MAX_SELECTED) : next;
 }
 
-type View = "home" | "insights" | "explore" | "catalog";
+type View = "home" | "insights" | "explore" | "catalog" | "index-lab";
 
 // The sidebar is a FEATURES nav rail (Koyfin pattern): Home = the markets overview, Data Insights =
 // the vintage/revision studies, Open Data Exploration = the catalog/discovery browser.
 const NAV: { id: View; label: string; icon: typeof Home }[] = [
   { id: "home", label: "Home", icon: Home },
   { id: "catalog", label: "Data Catalog", icon: Library },
+  { id: "index-lab", label: "Index Lab", icon: Scale },
   { id: "insights", label: "Data Insights", icon: Telescope },
   { id: "explore", label: "Open Data Exploration", icon: Compass },
 ];
@@ -124,6 +129,10 @@ export default function App() {
         ) : view === "catalog" ? (
           <Suspense fallback={<div className="px-6 pt-6 text-sm text-muted-foreground">Loading…</div>}>
             <CatalogTab search={search} onOpenInHome={openInHome} />
+          </Suspense>
+        ) : view === "index-lab" ? (
+          <Suspense fallback={<div className="px-6 pt-6 text-sm text-muted-foreground">Loading…</div>}>
+            <IndexLabTab search={search} />
           </Suspense>
         ) : view === "insights" ? (
           <Suspense fallback={<div className="px-6 pt-6 text-sm text-muted-foreground">Loading…</div>}>

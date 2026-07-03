@@ -8,7 +8,7 @@ code change. A ticker is "available" only after its source has been ingested.
 from app.ingest.sources.alfred import AlfredFetcher, FredLatestFetcher
 from app.ingest.sources.ecb import EcbFetcher
 from app.ingest.sources.phillyfed import PhillyFedRtdsFetcher
-from app.models import DataProduct, Series
+from app.models import DataProduct, IndexDefinition, Series
 
 # The v1 catalog. The per-series licence verdicts — `commercial_ok` (cleared for commercial DISPLAY)
 # and `downloadable` (cleared to redistribute as a FILE) — are NOT set inline; they are assigned per
@@ -289,3 +289,75 @@ for _s in V1_SERIES:
     _s.product_id = _XCAT_PRODUCT.get(_s.xcat)
     _s.commercial_ok, _s.downloadable = _LICENSE[_s.source]
     _s.unit = _UNIT.get(_s.series_id)
+
+
+# ── Index Lab: the seeded index RECIPES (rules as data) ───────────────────────────────────────────
+# Re-engineers published bond-index construction rules. Code-seeded + worker-upserted, exactly like the
+# series catalog and Data Products. The engine (app/ingest/index_engine.py) reads these to build a
+# composition; the read API serves them to the Index Lab UI. Parameters are VERSION-STAMPED via
+# `doc_version` — the values below are re-read from the operative methodology at build time, not guessed.
+#
+# `commercial_ok` is the contamination-safe AND over the index's INPUT sources (GREEN only if EVERY
+# input is GREEN). Kept FALSE here (default-deny) until the input fetchers + their sources-ledger rows
+# land in BUILD 3 — at which point us-treasury's verdict follows Treasury MSPD/FiscalData (provisional
+# pending the first-party ToS read) and em-composition's follows World Bank GNI (CC-BY, GREEN) + BIS
+# (GREEN w/ attribution). No ledger row -> stays FALSE, per the commercial-ok gate.
+INDEX_DEFINITIONS = [
+    IndexDefinition(
+        index_id="us-treasury",
+        title="DataQuest US Treasury Index",
+        description=(
+            "A demonstration government-bond index over marketable US Treasury notes & bonds, weighted "
+            "by face amount outstanding. Fully computable from public data, end to end."
+        ),
+        family="Treasury",
+        universe="US Treasuries",
+        currency="USD",
+        income_ceiling_usd=None,      # no income screen for a single-issuer government index
+        min_face_usd_mn=500.0,        # EMBI-class instrument floor (applied for rule fidelity)
+        min_maturity_years=2.5,       # >= 2.5 years to maturity at entry
+        exit_maturity_months=6.0,     # a bond drops out below 6 months to maturity
+        cap_scheme="none",            # single issuer -> pure face weight, no diversification cap
+        cap_pct=None,
+        rebalance_rule="monthly_last_business_day",
+        methodology_note=(
+            "EMBI-class instrument rules (>= US$500M face, >= 2.5y maturity at entry, exit below 6 "
+            "months) with face-amount weighting. Composition + weights only; no return series. Not "
+            "affiliated with, endorsed by, or comparable to any commercial benchmark index."
+        ),
+        doc_version="EMBI-class rules, parameters as of 2026-07",
+        commercial_ok=False,
+        attribution="Source: U.S. Department of the Treasury, Bureau of the Fiscal Service (MSPD)",
+        sort_order=1,
+    ),
+    IndexDefinition(
+        index_id="em-composition",
+        title="DataQuest EM Composition Index",
+        description=(
+            "A demonstration emerging-market sovereign COMPOSITION index: which countries qualify and "
+            "their diversification-capped weights. Composition only — no return series."
+        ),
+        family="EMBI-class",
+        universe="EM Sovereigns",
+        currency="USD",
+        income_ceiling_usd=23287.0,   # EMBI Index Income Ceiling (2024 value; version-stamped)
+        min_face_usd_mn=0.0,          # country-level index: no instrument face screen (income is the gate)
+        min_maturity_years=0.0,       # country-level index: no instrument maturity screen
+        exit_maturity_months=0.0,
+        cap_scheme="ica",             # the average-based (Index Country Average) diversification cap
+        cap_pct=None,
+        rebalance_rule="annual_latest_data",  # bound by the source data cadence (WB GNI + IDS are annual)
+        methodology_note=(
+            "EMBI-class country eligibility (GNI per capita below the Index Income Ceiling for 3 "
+            "consecutive years); weights by public & publicly-guaranteed external debt stock (World Bank "
+            "IDS, a documented proxy for sovereign supply), with an average-based (ICA) diversification "
+            "cap on counted debt. Country-level composition only — instrument-level face/maturity screens "
+            "do not apply; the published smoothed interpolation is rendered as a hard 2x-average cap. Not "
+            "affiliated with, endorsed by, or comparable to any commercial benchmark index."
+        ),
+        doc_version="EMBI-class rules, parameters as of 2026-07",
+        commercial_ok=True,  # both inputs are World Bank CC-BY (GREEN); contamination-AND = GREEN
+        attribution="The World Bank: World Development Indicators & International Debt Statistics (CC BY 4.0)",
+        sort_order=2,
+    ),
+]

@@ -70,6 +70,18 @@ class SeriesDataNotFound(DomainError):
                          f"No data for '{series_id}' as of {as_of}.")
 
 
+class IndexNotFound(DomainError):
+    def __init__(self, index_id: str) -> None:
+        super().__init__(404, "index-not-found", "Index not found",
+                         f"No index '{index_id}' in the catalog.")
+
+
+class IndexDataNotFound(DomainError):
+    def __init__(self, index_id: str, as_of: object) -> None:
+        super().__init__(404, "index-data-not-found", "No composition for index at that vintage",
+                         f"No composition for '{index_id}' as of {as_of}.")
+
+
 class ResultTooLarge(DomainError):
     def __init__(self, max_rows: int) -> None:
         super().__init__(422, "result-too-large", "Result set too large",

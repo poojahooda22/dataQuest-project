@@ -70,4 +70,67 @@ class Observation(SQLModel, table=True):
     #Example for Right join -> find all users with their address, and if a user hasn't filled address, that user shouldn't be returned.
     #full join -> will return both tables, even there is no listing on left or right table.
     #Example for Full join -> find all users with their address, and if a user hasn't filled address, that user should be returned with empty address.
-    
+
+
+class IndexDefinition(SQLModel, table=True):
+    """An INDEX RECIPE: the published, rules-as-data definition of one bond index.
+
+    The benchmark-construction layer. Every construction rule is stored as DATA (the income screen,
+    the face/maturity thresholds, the diversification-cap scheme) so the recipe is inspectable and
+    version-stamped, not hidden in code. The worker's index engine reads this recipe to build a
+    composition; the read API serves it to the Index Lab UI. Code-seeded + worker-upserted, exactly
+    like the series catalog.
+    """
+
+    index_id: str = Field(primary_key=True)   # slug, e.g. "us-treasury", "em-composition"
+    title: str                                # human label, e.g. "DataQuest US Treasury Index"
+    description: str = ""
+    family: str = ""                          # the benchmark family, e.g. "Treasury", "EMBI-class"
+    universe: str = ""                        # what it covers, e.g. "US Treasuries", "EM Sovereigns"
+    currency: str = "USD"
+
+    # ── The construction RULES, as data — the transparency; version-stamped by `doc_version` ──
+    income_ceiling_usd: float | None = None   # GNI-per-capita eligibility ceiling; NULL = no income screen
+    min_face_usd_mn: float = 0.0              # min face outstanding to qualify (USD millions)
+    min_maturity_years: float = 0.0          # min years to maturity AT ENTRY
+    exit_maturity_months: float = 0.0        # drop a constituent once it falls below this many months
+    cap_scheme: str = "none"                  # "ica" (diversification cap) | "none" (pure face weight)
+    cap_pct: float | None = None              # explicit cap, e.g. 0.09 = 9%; NULL = pure ICA / uncapped
+    rebalance_rule: str = "monthly_last_business_day"
+
+    methodology_note: str = ""                # plain-language explanation + the rule source
+    doc_version: str = ""                     # provenance of the parameters, e.g. "as of 2026-07"
+
+    # DISPLAY licence for the index, rolled up from its input sources under the contamination rule
+    # (GREEN only if EVERY input is GREEN). Assigned per index from the ledger, default-deny — like
+    # the series catalog's `commercial_ok`.
+    commercial_ok: bool = False
+    attribution: str = ""
+    sort_order: int = 0                       # display order in the Index Lab list
+
+
+class IndexComposition(SQLModel, table=True):
+    """The INDEX PANEL: one row per constituent, per rebalance, per vintage. Append-only.
+
+    Each monthly rebalance produces a SET of constituents with weights; we store every set stamped
+    with a `vintage_date` (when we computed it), so the composition is point-in-time — "what did the
+    index look like as known on date X" — the same vintage discipline as the Observation panel. A
+    recompute of a past rebalance (e.g. after an input revision) is a NEW vintage, never an overwrite.
+    Ineligible constituents are kept (eligible=False) so the "how it's built" screen can show why.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    index_id: str = Field(foreign_key="indexdefinition.index_id", index=True)
+    rebalance_date: date                      # the month-end the composition is FOR (the effective date)
+    vintage_date: date                        # when this composition was computed / first known (= real_date)
+    constituent_id: str                       # the weighted item: a CUSIP (Treasury) or country code (EM)
+    constituent_name: str = ""                # display label, e.g. "Mexico" or the security description
+    cid: str = ""                             # market/country grouping code, mirrors Series.cid
+    face_amount: float = 0.0                  # the size input (USD millions) — the raw-weight numerator
+    raw_weight: float = 0.0                   # face / total eligible face, BEFORE the cap (0..1)
+    capped_weight: float = 0.0                # weight AFTER the cap + redistribution (0..1)
+    eligible: bool = True                     # did it pass the screen (ineligible rows kept for the audit)
+    eligibility_reason: str = ""              # short human why-in / why-out, for the "how it's built" table
+    # A hand-written migration adds, on top of these columns:
+    #   UNIQUE (index_id, rebalance_date, vintage_date, constituent_id)  -> idempotent ON CONFLICT
+    #   INDEX  (index_id, rebalance_date, vintage_date DESC)             -> the PIT index (mirrors ix_obs_pit)

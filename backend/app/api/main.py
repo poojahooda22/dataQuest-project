@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 
-from app.api.routes import catalog, datasets, dcat, observations, products, qdf, series
+from app.api.routes import catalog, datasets, dcat, indices, observations, products, qdf, series
 from app.core.ratelimit import rate_limit
 
 # Rate-limit EVERY /api/v1 route (not /health). The dependency sets RateLimit-* headers and
@@ -15,3 +15,4 @@ api_router.include_router(datasets.router)      # -> /api/v1/datasets/{ticker}/a
 api_router.include_router(dcat.router)          # -> /api/v1/catalog.jsonld (DCAT-v3 catalog export)
 api_router.include_router(observations.router)  # -> /api/v1/observations
 api_router.include_router(qdf.router)           # -> /api/v1/qdf (macrosynergy-loadable QDF)
+api_router.include_router(indices.router)       # -> /api/v1/indices (Index Lab: list, detail, composition, changes)

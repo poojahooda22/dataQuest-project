@@ -199,3 +199,82 @@ export interface RevisionStatsUnavailable {
 }
 
 export type RevisionStatsResponse = RevisionStats | RevisionStatsUnavailable;
+
+// ── Index Lab — GET /api/v1/indices/* (mirrors backend/app/api/routes/indices.py) ──
+
+/** One index in the list — GET /indices. Carries the per-index commercial-display verdict. */
+export interface IndexSummary {
+  index_id: string;
+  title: string;
+  description: string;
+  family: string; // "Treasury" | "EMBI-class"
+  universe: string; // "US Treasuries" | "EM Sovereigns"
+  currency: string;
+  cap_scheme: string; // "none" | "pct" | "ica"
+  commercial_ok: boolean;
+  attribution: string;
+  latest_rebalance: string | null; // ISO date of the newest stored rebalance
+  n_eligible: number;
+  n_excluded: number;
+}
+
+/** The construction rules, as data — shown in the "how it's built" panel. */
+export interface IndexRules {
+  income_ceiling_usd: number | null; // GNI/capita eligibility ceiling; null = no income screen
+  min_face_usd_mn: number;
+  min_maturity_years: number;
+  exit_maturity_months: number;
+  cap_scheme: string;
+  cap_pct: number | null;
+  rebalance_rule: string;
+}
+
+/** GET /indices/{id} — one index: rules-as-data + latest-composition summary. */
+export interface IndexDetail extends IndexSummary {
+  rules: IndexRules;
+  methodology_note: string;
+  doc_version: string;
+  latest_vintage: string | null;
+}
+
+/** One constituent of a composition (a bond or a country). */
+export interface Constituent {
+  constituent_id: string;
+  constituent_name: string;
+  cid: string;
+  face_amount: number; // USD millions
+  raw_weight: number; // 0..1, before the cap
+  capped_weight: number; // 0..1, after the cap
+  eligible: boolean;
+  eligibility_reason: string;
+}
+
+/** GET /indices/{id}/composition — the point-in-time composition. Carries the licence gate. */
+export interface CompositionResponse {
+  index_id: string;
+  as_of: string;
+  rebalance_date: string;
+  vintage_date: string;
+  commercial_ok: boolean;
+  attribution: string;
+  n_eligible: number;
+  n_excluded: number;
+  constituents: Constituent[];
+}
+
+/** One rebalance change — part of ChangesResponse. */
+export interface IndexChange {
+  constituent_id: string;
+  constituent_name: string;
+  kind: "added" | "dropped" | "reweighted";
+  old_weight: number | null;
+  new_weight: number | null;
+}
+
+/** GET /indices/{id}/changes — what changed between the two most recent rebalances. */
+export interface ChangesResponse {
+  index_id: string;
+  from_rebalance: string | null;
+  to_rebalance: string | null;
+  changes: IndexChange[];
+}
